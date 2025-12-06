@@ -27,9 +27,18 @@ jobs:
       - name: Unzip NeonSurvivor project
         run: |
           unzip NeonSurvivor_project.zip
-          ls
+          ls NeonSurvivor
 
-      # 🔧 Patch app/build.gradle inside the unzipped project
+      # 🔧 Ensure AndroidX is enabled
+      - name: Patch gradle.properties
+        run: |
+          cat > NeonSurvivor/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+      # 🔧 Ensure app/build.gradle has the right deps & config
       - name: Patch app build.gradle
         run: |
           cat > NeonSurvivor/app/build.gradle << 'EOF'
