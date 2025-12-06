@@ -29,7 +29,7 @@ jobs:
           unzip NeonSurvivor_project.zip
           ls NeonSurvivor
 
-      # 🔧 Ensure AndroidX is enabled
+      # Ensure AndroidX is enabled (harmless even if we don't use it)
       - name: Patch gradle.properties
         run: |
           cat > NeonSurvivor/gradle.properties << 'EOF'
@@ -38,7 +38,7 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      # 🔧 Ensure app/build.gradle has the right deps & config
+      # Make sure app/build.gradle is sane
       - name: Patch app build.gradle
         run: |
           cat > NeonSurvivor/app/build.gradle << 'EOF'
@@ -77,6 +77,46 @@ jobs:
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0"
               implementation "androidx.core:core-ktx:1.12.0"
               implementation "androidx.appcompat:appcompat:1.7.1"
+          }
+          EOF
+
+      # 🔧 Replace MainActivity to extend plain Activity (no AppCompat theme requirement)
+      - name: Patch MainActivity
+        run: |
+          cat > NeonSurvivor/app/src/main/java/com/example/neonsurvivor/MainActivity.kt << 'EOF'
+          package com.example.neonsurvivor
+
+          import android.app.Activity
+          import android.os.Bundle
+          import android.view.View
+          import android.view.WindowManager
+
+          class MainActivity : Activity() {
+
+              private lateinit var gameView: GameView
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  window.decorView.systemUiVisibility =
+                      (View.SYSTEM_UI_FLAG_FULLSCREEN
+                              or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                              or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+
+                  gameView = GameView(this)
+                  setContentView(gameView)
+              }
+
+              override fun onPause() {
+                  super.onPause()
+                  gameView.pause()
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  gameView.resume()
+              }
           }
           EOF
 
