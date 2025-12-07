@@ -1,6 +1,8 @@
 package com.example.neonsurvivor
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.graphics.*
 import android.os.Build
 import android.os.VibrationEffect
@@ -223,12 +225,10 @@ class GameView(context: Context) : View(context) {
 
     private fun update(dt: Float) {
         if (playerHp <= 0) {
-            wave = 1
-            playerHp = maxHp
-            bulletDamage = 8f
-            fireRate = 1.5f
-            playerSpeed = 250f
-            spawnWave()
+            // Return to splash screen on death
+            val intent = Intent(context, SplashActivity::class.java)
+            (context as Activity).startActivity(intent)
+            (context as Activity).finish()
             return
         }
 
