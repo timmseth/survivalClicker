@@ -83,10 +83,15 @@ class SettingsView(context: Context) : View(context) {
     private var soundToggleRect = RectF()
     private var musicVolumeSliderRect = RectF()
     private var rainVolumeSliderRect = RectF()
+    private var saveButtonRect = RectF()
+    private var loadButtonRect = RectF()
     private var backButtonRect = RectF()
 
     private var draggingMusicSlider = false
     private var draggingRainSlider = false
+
+    // Game stats prefs for save/load
+    private val gamePrefs = context.getSharedPreferences("game_stats", Context.MODE_PRIVATE)
 
     init {
         isFocusable = true
@@ -138,16 +143,34 @@ class SettingsView(context: Context) : View(context) {
             sliderStartX + sliderWidth, h * 0.58f + sliderHeight
         )
 
+        // Save/Load buttons (side by side)
+        val smallButtonWidth = w * 0.35f
+        val buttonHeight = 100f
+
+        saveButtonRect = RectF(
+            w * 0.1f,
+            h * 0.73f,
+            w * 0.1f + smallButtonWidth,
+            h * 0.73f + buttonHeight
+        )
+
+        loadButtonRect = RectF(
+            w * 0.55f,
+            h * 0.73f,
+            w * 0.55f + smallButtonWidth,
+            h * 0.73f + buttonHeight
+        )
+
         // Back button
         val buttonWidth = w * 0.7f
-        val buttonHeight = 120f
+        val backButtonHeight = 120f
         val buttonCenterX = w / 2f
 
         backButtonRect = RectF(
             buttonCenterX - buttonWidth / 2f,
-            h * 0.75f,
+            h * 0.87f,
             buttonCenterX + buttonWidth / 2f,
-            h * 0.75f + buttonHeight
+            h * 0.87f + backButtonHeight
         )
     }
 
@@ -218,6 +241,40 @@ class SettingsView(context: Context) : View(context) {
             10f, 10f, toggleOnPaint
         )
 
+        // Save/Load buttons
+        val smallTextPaint = Paint().apply {
+            color = Color.CYAN
+            textSize = 45f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+
+        // Check if save exists
+        val hasSave = gamePrefs.getInt("saved_wave", 0) > 0
+
+        canvas.drawRoundRect(saveButtonRect, 15f, 15f, buttonBgPaint)
+        canvas.drawRoundRect(saveButtonRect, 15f, 15f, buttonBorderPaint)
+        canvas.drawText("SAVE", saveButtonRect.centerX(), saveButtonRect.centerY() + 15f, smallTextPaint)
+
+        val loadBorderPaint = Paint().apply {
+            color = if (hasSave) Color.CYAN else Color.GRAY
+            style = Paint.Style.STROKE
+            strokeWidth = 6f
+            isAntiAlias = true
+        }
+        val loadTextPaint = Paint().apply {
+            color = if (hasSave) Color.CYAN else Color.GRAY
+            textSize = 45f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+
+        canvas.drawRoundRect(loadButtonRect, 15f, 15f, buttonBgPaint)
+        canvas.drawRoundRect(loadButtonRect, 15f, 15f, loadBorderPaint)
+        canvas.drawText("LOAD", loadButtonRect.centerX(), loadButtonRect.centerY() + 15f, loadTextPaint)
+
         // Back button
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBgPaint)
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBorderPaint)
@@ -282,6 +339,20 @@ class SettingsView(context: Context) : View(context) {
                             AudioManager.stopRain()
                         }
                         invalidate()
+                        return true
+                    }
+                    saveButtonRect.contains(x, y) -> {
+                        // Trigger save in GameView (via broadcast or shared pref flag)
+                        gamePrefs.edit().putBoolean("trigger_save", true).apply()
+                        invalidate() // Refresh to show save exists
+                        return true
+                    }
+                    loadButtonRect.contains(x, y) -> {
+                        // Only allow load if save exists
+                        if (gamePrefs.getInt("saved_wave", 0) > 0) {
+                            gamePrefs.edit().putBoolean("trigger_load", true).apply()
+                            (context as Activity).finish()
+                        }
                         return true
                     }
                     backButtonRect.contains(x, y) -> {

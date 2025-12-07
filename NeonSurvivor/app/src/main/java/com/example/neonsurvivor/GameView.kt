@@ -217,6 +217,16 @@ class GameView(context: Context) : View(context) {
     fun resume() {
         running = true
         if (initialized) {
+            // Check for save/load triggers
+            if (prefs.getBoolean("trigger_save", false)) {
+                saveGameState()
+                prefs.edit().putBoolean("trigger_save", false).apply()
+            }
+            if (prefs.getBoolean("trigger_load", false)) {
+                loadGameState()
+                prefs.edit().putBoolean("trigger_load", false).apply()
+            }
+
             if (isPaused) {
                 // Start 3-2-1 countdown on unpause
                 isPaused = false
@@ -550,6 +560,58 @@ class GameView(context: Context) : View(context) {
                 bullets.add(Bullet(playerX, playerY, nx * bulletSpeed, ny * bulletSpeed))
                 fireCooldown = 1f / fireRate
             }
+        }
+    }
+
+    private fun saveGameState() {
+        prefs.edit().apply {
+            putInt("saved_wave", wave)
+            putInt("saved_hp", playerHp)
+            putInt("saved_max_hp", maxHp)
+            putFloat("saved_damage", bulletDamage)
+            putFloat("saved_fire_rate", fireRate)
+            putFloat("saved_speed", playerSpeed)
+            putInt("saved_kills", killCount)
+            apply()
+        }
+    }
+
+    private fun loadGameState() {
+        val savedWave = prefs.getInt("saved_wave", 0)
+        if (savedWave > 0) {
+            wave = savedWave
+            playerHp = prefs.getInt("saved_hp", 100)
+            maxHp = prefs.getInt("saved_max_hp", 100)
+            bulletDamage = prefs.getFloat("saved_damage", 8f)
+            fireRate = prefs.getFloat("saved_fire_rate", 1.5f)
+            playerSpeed = prefs.getFloat("saved_speed", 250f)
+            killCount = prefs.getInt("saved_kills", 0)
+
+            // Spawn enemies for current wave
+            enemies.clear()
+            val count = 8 + wave * 3
+            for (i in 0 until count) {
+                val angle = Random.nextFloat() * 2 * PI.toFloat()
+                val distance = 600f + Random.nextFloat() * 200f
+                val ex = playerX + cos(angle) * distance
+                val ey = playerY + sin(angle) * distance
+                val baseSpeed = 100f + wave * 15f
+                val hp = 30f + wave * 10f
+                enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp))
+            }
+        }
+    }
+
+    private fun clearSavedGame() {
+        prefs.edit().apply {
+            remove("saved_wave")
+            remove("saved_hp")
+            remove("saved_max_hp")
+            remove("saved_damage")
+            remove("saved_fire_rate")
+            remove("saved_speed")
+            remove("saved_kills")
+            apply()
         }
     }
 
