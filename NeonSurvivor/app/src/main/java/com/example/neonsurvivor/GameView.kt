@@ -170,10 +170,11 @@ class GameView(context: Context) : View(context) {
     // Player
     private var playerX = 0f
     private var playerY = 0f
-    private var playerRadius = 96f // 3x larger hitbox (was 32f)
+    private var playerRadius = 60f // Tightened to match sprite borders (~70% of height)
     private var playerSpeed = 250f  // Reduced from 300
     private var playerHp = 100
     private var maxHp = 100
+    private var playerFacingLeft = false // Track sprite facing direction
 
     // Stats (rebalanced for difficulty)
     private var bulletDamage = 8f
@@ -555,12 +556,19 @@ class GameView(context: Context) : View(context) {
             val len = hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat()
             if (len > 0.01f) {
                 val nx = joyDx / len
-                val ny = joyDy / len
+                val ny = joyDx / len
                 // Apply speed boost stacks (10% per stack)
                 val speedMultiplier = 1f + (speedBoostStacks * 0.10f)
                 playerX += nx * playerSpeed * speedMultiplier * dt
                 playerY += ny * playerSpeed * speedMultiplier * dt
                 isMoving = true
+
+                // Track facing direction for sprite flipping
+                if (joyDx < -0.1f) {
+                    playerFacingLeft = true
+                } else if (joyDx > 0.1f) {
+                    playerFacingLeft = false
+                }
             }
         }
 
@@ -1367,13 +1375,22 @@ class GameView(context: Context) : View(context) {
             (currentFrame + 1) * frameHeight
         )
 
-        // Destination rect (where to draw on screen) - now 3x wider
-        val dstRect = RectF(
-            playerX - spriteWidth / 2f,
-            playerY - spriteHeight / 2f,
-            playerX + spriteWidth / 2f,
-            playerY + spriteHeight / 2f
-        )
+        // Destination rect (where to draw on screen) - flip horizontally when facing left
+        val dstRect = if (playerFacingLeft) {
+            RectF(
+                playerX + spriteWidth / 2f,  // Flipped: right edge becomes left
+                playerY - spriteHeight / 2f,
+                playerX - spriteWidth / 2f,  // Flipped: left edge becomes right
+                playerY + spriteHeight / 2f
+            )
+        } else {
+            RectF(
+                playerX - spriteWidth / 2f,
+                playerY - spriteHeight / 2f,
+                playerX + spriteWidth / 2f,
+                playerY + spriteHeight / 2f
+            )
+        }
 
         // Draw neon glow behind sprite (smaller radius)
         canvas.drawCircle(playerX, playerY, spriteHeight / 2.5f, spriteGlowPaint)
