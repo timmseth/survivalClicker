@@ -60,7 +60,7 @@ class GameView(context: Context) : View(context) {
         color = Color.MAGENTA
         style = Paint.Style.FILL
         isAntiAlias = true
-        maskFilter = BlurMaskFilter(20f, BlurMaskFilter.Blur.NORMAL) // Magenta glow
+        maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL) // Sharper glow
     }
     private val bulletPaint = Paint().apply {
         color = Color.CYAN
@@ -172,11 +172,26 @@ class GameView(context: Context) : View(context) {
     private var fireRate = 1.5f
     private var fireCooldown = 0f
 
-    // Power-up states
+    // Power-up states (stackable ones use counters)
     private var hasSpreadShot = false
     private var hasRapidFire = false
     private var hasPiercing = false
     private var hasHoming = false
+    private var speedBoostStacks = 0
+    private var hasGiantBullets = false
+    private var hasBouncyShots = false
+    private var hasExplosiveRounds = false
+    private var vampireStacks = 0
+    private var shieldCount = 0
+    private var hasMagnet = false
+    private var hasBulletTime = false
+    private var bulletTimeActive = false
+    private var bulletTimeTimer = 0f
+    private var hasOrbital = false
+    private var orbitalAngle = 0f
+    private var hasLaserSight = false
+    private var multishotStacks = 0
+    private var hasShockwave = false
 
     // Kill tracking
     private var killCount = 0
@@ -208,6 +223,7 @@ class GameView(context: Context) : View(context) {
         var radius: Float,
         var speed: Float,
         var hp: Float,
+        val maxHp: Float,
         val type: EnemyType,
         var shootCooldown: Float = 0f
     ) {
@@ -218,12 +234,41 @@ class GameView(context: Context) : View(context) {
             EnemyType.PENTAGON -> 5
             EnemyType.HEXAGON -> 6
         }
+
+        fun getGlowRadius(): Float {
+            val hpRatio = (hp / maxHp).coerceIn(0f, 1f)
+            return 10f * hpRatio  // Glow shrinks from 10f to 0f as enemy takes damage
+        }
+
+        fun getDropChance(): Float = when(type) {
+            EnemyType.CIRCLE -> 0.10f      // 10% - common enemy
+            EnemyType.TRIANGLE -> 0.15f    // 15%
+            EnemyType.SQUARE -> 0.20f      // 20%
+            EnemyType.PENTAGON -> 0.25f    // 25%
+            EnemyType.HEXAGON -> 0.35f     // 35% - rare and tough
+        }
     }
 
     data class Bullet(var x: Float, var y: Float, var vx: Float, var vy: Float, var isPlayerBullet: Boolean = true)
     data class BloodParticle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float)
 
-    enum class PowerUpType { SPREAD_SHOT, RAPID_FIRE, PIERCING, HOMING }
+    enum class PowerUpType {
+        // Original powerups
+        SPREAD_SHOT, RAPID_FIRE, PIERCING, HOMING,
+        // New gameplay modifiers
+        SPEED_BOOST,      // Increases player movement speed (stackable)
+        GIANT_BULLETS,    // Makes bullets larger with more impact
+        BOUNCY_SHOTS,     // Bullets bounce off screen edges
+        EXPLOSIVE_ROUNDS, // Bullets create small explosion on hit
+        VAMPIRE,          // Heal 1 HP per enemy kill (stackable)
+        SHIELD,           // Gain 1 shield that absorbs one hit
+        MAGNET,           // Attracts power-ups from farther away
+        BULLET_TIME,      // Slow down time briefly when hit
+        ORBITAL,          // Spinning bullet orbits around player
+        LASER_SIGHT,      // Auto-aim assistance
+        MULTISHOT,        // Fire an additional bullet (stackable)
+        SHOCKWAVE         // Create damaging wave on kill
+    }
     data class PowerUp(var x: Float, var y: Float, val type: PowerUpType, var vy: Float = 150f)
 
     private val enemies = mutableListOf<Enemy>()
@@ -397,7 +442,7 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
-            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, enemyType))
+            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, hp, enemyType))
         }
         if (playerHp <= 0) {
             playerHp = maxHp
@@ -478,8 +523,10 @@ class GameView(context: Context) : View(context) {
             if (len > 0.01f) {
                 val nx = joyDx / len
                 val ny = joyDy / len
-                playerX += nx * playerSpeed * dt
-                playerY += ny * playerSpeed * dt
+                // Apply speed boost stacks (10% per stack)
+                val speedMultiplier = 1f + (speedBoostStacks * 0.10f)
+                playerX += nx * playerSpeed * speedMultiplier * dt
+                playerY += ny * playerSpeed * speedMultiplier * dt
                 isMoving = true
             }
         }
@@ -529,11 +576,23 @@ class GameView(context: Context) : View(context) {
             }
 
             if (dist < e.radius + playerRadius && damageCooldown <= 0f) {
-                // Increased damage from 15 to 25 per second, but with cooldown
-                playerHp -= 25
-                if (playerHp < 0) playerHp = 0
-                tookDamage = true
-                damageCooldown = 0.5f // Half second between damage ticks
+                // Shield absorbs damage
+                if (shieldCount > 0) {
+                    shieldCount--
+                    damageCooldown = 0.5f
+                } else {
+                    // Increased damage from 15 to 25 per second, but with cooldown
+                    playerHp -= 25
+                    if (playerHp < 0) playerHp = 0
+                    tookDamage = true
+                    damageCooldown = 0.5f // Half second between damage ticks
+
+                    // Bullet time activates when hit
+                    if (hasBulletTime) {
+                        bulletTimeActive = true
+                        bulletTimeTimer = 2f // 2 seconds of slow-mo
+                    }
+                }
 
                 // Trigger hit animation
                 isPlayingHitAnimation = true
@@ -612,11 +671,27 @@ class GameView(context: Context) : View(context) {
                         bulletIt.remove() // Remove bullet unless piercing
                     }
                     if (hitEnemy.hp <= 0f) {
-                        // Enemy died - chance to drop power-up
-                        if (Random.nextFloat() < 0.15f) { // 15% drop chance
+                        // Enemy died - chance to drop power-up based on enemy type
+                        if (Random.nextFloat() < hitEnemy.getDropChance()) {
                             val powerUpType = PowerUpType.values()[Random.nextInt(PowerUpType.values().size)]
                             powerUps.add(PowerUp(hitEnemy.x, hitEnemy.y, powerUpType))
                         }
+
+                        // Vampire effect - heal on kill
+                        if (vampireStacks > 0) {
+                            playerHp = min(playerHp + vampireStacks, maxHp)
+                        }
+
+                        // Shockwave effect - damage nearby enemies
+                        if (hasShockwave) {
+                            for (nearEnemy in enemies) {
+                                val shockDist = hypot((nearEnemy.x - hitEnemy.x).toDouble(), (nearEnemy.y - hitEnemy.y).toDouble()).toFloat()
+                                if (shockDist < 150f && nearEnemy != hitEnemy) {
+                                    nearEnemy.hp -= bulletDamage * 0.5f
+                                }
+                            }
+                        }
+
                         enemies.remove(hitEnemy)
                         killCount++
                     }
@@ -668,18 +743,31 @@ class GameView(context: Context) : View(context) {
                 val ny = dy / dist
                 val bulletSpeed = 700f
 
+                // Calculate number of shots (base + multishot stacks)
+                val totalShots = 1 + multishotStacks
+
                 // Apply power-ups
                 if (hasSpreadShot) {
-                    // Fire 3 bullets in a spread
+                    // Fire 3 bullets in a spread per shot
                     val spreadAngle = 0.3f
-                    for (i in -1..1) {
-                        val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle
+                    for (shot in 0 until totalShots) {
+                        val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.2f else 0f
+                        for (i in -1..1) {
+                            val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle + angleOffset
+                            val vx = cos(angle) * bulletSpeed
+                            val vy = sin(angle) * bulletSpeed
+                            bullets.add(Bullet(playerX, playerY, vx, vy, true))
+                        }
+                    }
+                } else {
+                    // Fire multiple shots in a tight spread
+                    for (shot in 0 until totalShots) {
+                        val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.15f else 0f
+                        val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + angleOffset
                         val vx = cos(angle) * bulletSpeed
                         val vy = sin(angle) * bulletSpeed
                         bullets.add(Bullet(playerX, playerY, vx, vy, true))
                     }
-                } else {
-                    bullets.add(Bullet(playerX, playerY, nx * bulletSpeed, ny * bulletSpeed, true))
                 }
 
                 val actualFireRate = if (hasRapidFire) fireRate * 1.5f else fireRate
@@ -691,19 +779,32 @@ class GameView(context: Context) : View(context) {
     private fun handleEnemyShooting(dt: Float) {
         for (e in enemies) {
             val cornerCount = e.getCornerCount()
-            if (cornerCount == 0) continue // Circles don't shoot
 
             if (e.shootCooldown <= 0f) {
-                // Shoot bullets equal to corner count
-                val angleStep = (2f * PI.toFloat()) / cornerCount
-                for (i in 0 until cornerCount) {
-                    val angle = angleStep * i
-                    val bulletSpeed = 200f // Slow dodgeable bullets
-                    val vx = cos(angle) * bulletSpeed
-                    val vy = sin(angle) * bulletSpeed
-                    bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                if (cornerCount == 0) {
+                    // Circles fire one slow shot toward player after delay
+                    val dx = playerX - e.x
+                    val dy = playerY - e.y
+                    val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                    if (dist > 0f) {
+                        val bulletSpeed = 150f // Slower than polygon bullets
+                        val vx = (dx / dist) * bulletSpeed
+                        val vy = (dy / dist) * bulletSpeed
+                        bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                    }
+                    e.shootCooldown = 4f // Shoot every 4 seconds (longer delay)
+                } else {
+                    // Polygon enemies shoot bullets equal to corner count
+                    val angleStep = (2f * PI.toFloat()) / cornerCount
+                    for (i in 0 until cornerCount) {
+                        val angle = angleStep * i
+                        val bulletSpeed = 200f // Slow dodgeable bullets
+                        val vx = cos(angle) * bulletSpeed
+                        val vy = sin(angle) * bulletSpeed
+                        bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                    }
+                    e.shootCooldown = 3f // Shoot every 3 seconds
                 }
-                e.shootCooldown = 3f // Shoot every 3 seconds
             }
         }
     }
@@ -718,15 +819,36 @@ class GameView(context: Context) : View(context) {
             val dx = p.x - playerX
             val dy = p.y - playerY
             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-            if (dist < playerRadius + 20f) {
-                // Apply power-up
-                when (p.type) {
-                    PowerUpType.SPREAD_SHOT -> hasSpreadShot = true
-                    PowerUpType.RAPID_FIRE -> hasRapidFire = true
-                    PowerUpType.PIERCING -> hasPiercing = true
-                    PowerUpType.HOMING -> hasHoming = true
+            // Magnet effect pulls power-ups closer
+            val magnetRadius = if (hasMagnet) 200f else 35f
+            if (dist < playerRadius + magnetRadius) {
+                if (hasMagnet && dist > playerRadius + 35f) {
+                    // Pull toward player
+                    val pullSpeed = 400f
+                    p.x += -(dx / dist) * pullSpeed * dt
+                    p.y += -(dy / dist) * pullSpeed * dt
+                } else {
+                    // Collected - apply power-up
+                    when (p.type) {
+                        PowerUpType.SPREAD_SHOT -> hasSpreadShot = true
+                        PowerUpType.RAPID_FIRE -> hasRapidFire = true
+                        PowerUpType.PIERCING -> hasPiercing = true
+                        PowerUpType.HOMING -> hasHoming = true
+                        PowerUpType.SPEED_BOOST -> speedBoostStacks++
+                        PowerUpType.GIANT_BULLETS -> hasGiantBullets = true
+                        PowerUpType.BOUNCY_SHOTS -> hasBouncyShots = true
+                        PowerUpType.EXPLOSIVE_ROUNDS -> hasExplosiveRounds = true
+                        PowerUpType.VAMPIRE -> vampireStacks++
+                        PowerUpType.SHIELD -> shieldCount++
+                        PowerUpType.MAGNET -> hasMagnet = true
+                        PowerUpType.BULLET_TIME -> hasBulletTime = true
+                        PowerUpType.ORBITAL -> hasOrbital = true
+                        PowerUpType.LASER_SIGHT -> hasLaserSight = true
+                        PowerUpType.MULTISHOT -> multishotStacks++
+                        PowerUpType.SHOCKWAVE -> hasShockwave = true
+                    }
+                    it.remove()
                 }
-                it.remove()
             } else if (p.y > playerY + height / 2f + 100f) {
                 // Remove if off screen
                 it.remove()
@@ -816,7 +938,7 @@ class GameView(context: Context) : View(context) {
             val ey = playerY + sin(angle) * distance
             val baseSpeed = 100f + wave * 15f
             val hp = 30f + wave * 10f
-            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, EnemyType.CIRCLE))
+            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, hp, EnemyType.CIRCLE))
         }
     }
 
@@ -1069,9 +1191,10 @@ class GameView(context: Context) : View(context) {
 
         // Draw enemies as polygons based on type
         for (e in enemies) {
+            val glowRadius = e.getGlowRadius()
             when (e.type) {
                 EnemyType.CIRCLE -> {
-                    canvas.drawCircle(e.x, e.y, e.radius + 10f, enemyGlowPaint)
+                    canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
                     canvas.drawCircle(e.x, e.y, e.radius, enemyPaint)
                 }
                 else -> {
@@ -1088,12 +1211,12 @@ class GameView(context: Context) : View(context) {
                     }
                     path.close()
 
-                    // Glow
+                    // Glow (shrinks with damage)
                     val glowPath = Path()
                     for (i in 0 until corners) {
                         val angle = angleStep * i - PI.toFloat() / 2f
-                        val px = e.x + cos(angle) * (e.radius + 10f)
-                        val py = e.y + sin(angle) * (e.radius + 10f)
+                        val px = e.x + cos(angle) * (e.radius + glowRadius)
+                        val py = e.y + sin(angle) * (e.radius + glowRadius)
                         if (i == 0) glowPath.moveTo(px, py)
                         else glowPath.lineTo(px, py)
                     }
@@ -1104,14 +1227,14 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Draw power-ups
+        // Draw power-ups (larger and clearer)
         for (p in powerUps) {
-            canvas.drawCircle(p.x, p.y, 20f, powerUpGlowPaint)
-            canvas.drawCircle(p.x, p.y, 12f, powerUpPaint)
+            canvas.drawCircle(p.x, p.y, 35f, powerUpGlowPaint)
+            canvas.drawCircle(p.x, p.y, 22f, powerUpPaint)
             // Draw icon/letter for power-up type
             val iconPaint = Paint().apply {
                 color = Color.BLACK
-                textSize = 16f
+                textSize = 28f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
@@ -1121,8 +1244,20 @@ class GameView(context: Context) : View(context) {
                 PowerUpType.RAPID_FIRE -> "R"
                 PowerUpType.PIERCING -> "P"
                 PowerUpType.HOMING -> "H"
+                PowerUpType.SPEED_BOOST -> "+"
+                PowerUpType.GIANT_BULLETS -> "B"
+                PowerUpType.BOUNCY_SHOTS -> "~"
+                PowerUpType.EXPLOSIVE_ROUNDS -> "E"
+                PowerUpType.VAMPIRE -> "V"
+                PowerUpType.SHIELD -> "⬡"
+                PowerUpType.MAGNET -> "M"
+                PowerUpType.BULLET_TIME -> "T"
+                PowerUpType.ORBITAL -> "O"
+                PowerUpType.LASER_SIGHT -> "L"
+                PowerUpType.MULTISHOT -> "X"
+                PowerUpType.SHOCKWAVE -> "W"
             }
-            canvas.drawText(icon, p.x, p.y + 6f, iconPaint)
+            canvas.drawText(icon, p.x, p.y + 10f, iconPaint)
         }
 
         // Draw player sprite
@@ -1265,9 +1400,13 @@ class GameView(context: Context) : View(context) {
 
         // Death screen overlay
         if (inDeathScreen || isDying) {
-            // Fade to black with red tint
+            // Black to red gradient
             val deathOverlayPaint = Paint().apply {
-                color = Color.rgb(20, 0, 0) // Dark red instead of pure black
+                shader = LinearGradient(
+                    0f, 0f, 0f, h,
+                    Color.BLACK, Color.rgb(80, 0, 0),
+                    Shader.TileMode.CLAMP
+                )
                 alpha = deathScreenFadeAlpha.toInt().coerceIn(0, 255)
             }
             canvas.drawRect(0f, 0f, w, h, deathOverlayPaint)

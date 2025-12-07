@@ -25,10 +25,16 @@ class MainActivity : Activity() {
     override fun onPause() {
         super.onPause()
         gameView.pause()
+        // Stop audio when game loses focus
+        AudioManager.stopMusic()
+        AudioManager.stopRain()
     }
 
     override fun onResume() {
         super.onResume()
         gameView.resume()
+        // Resume audio when game regains focus
+        AudioManager.startMusic(this)
+        AudioManager.startRain(this)
     }
 }
