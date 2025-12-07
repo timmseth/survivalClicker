@@ -118,9 +118,15 @@ class GameView(context: Context) : View(context) {
     // Player sprite animation
     private val playerIdleSprite: Bitmap
     private val playerRunSprite: Bitmap
+    private val playerHitSprite: Bitmap
+    private val playerDeathSprite: Bitmap
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
+    private var hitAnimationTime = 0f
+    private var isPlayingHitAnimation = false
+    private var isDying = false
+    private var deathAnimationTime = 0f
     private val spriteWidth = 576f // 3x wider (3 * 192)
     private val spriteHeight = 192f // 3x larger height (was 64f)
     private val spritePaint = Paint().apply {
@@ -180,6 +186,12 @@ class GameView(context: Context) : View(context) {
     private var wave = 1
     private var inGacha = false
 
+    // Death screen
+    private var inDeathScreen = false
+    private var deathScreenFadeAlpha = 0f
+    private var rebornButtonRect = RectF()
+    private var dieButtonRect = RectF()
+
     enum class UpgradeType { DAMAGE, FIRE_RATE, SPEED, HP }
     data class UpgradeOption(val type: UpgradeType, val label: String, val desc: String)
     private val upgradeOptions = mutableListOf<UpgradeOption>()
@@ -194,6 +206,8 @@ class GameView(context: Context) : View(context) {
         // Load player sprites
         playerIdleSprite = BitmapFactory.decodeResource(resources, R.drawable.player_idle)
         playerRunSprite = BitmapFactory.decodeResource(resources, R.drawable.player_run)
+        playerHitSprite = BitmapFactory.decodeResource(resources, R.drawable.player_attack) // Using attack as hit
+        playerDeathSprite = BitmapFactory.decodeResource(resources, R.drawable.player_death)
     }
 
     fun pause() {
@@ -307,18 +321,33 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun update(dt: Float) {
-        if (playerHp <= 0) {
+        if (playerHp <= 0 && !isDying && !inDeathScreen) {
+            // Trigger death sequence
+            isDying = true
+            deathAnimationTime = 0f
+            currentFrame = 0
+
             // Save high score if this run beat it
             val currentHighScore = prefs.getInt("high_score", 0)
             if (killCount > currentHighScore) {
                 prefs.edit().putInt("high_score", killCount).apply()
             }
+        }
 
-            // Return to splash screen on death
-            val intent = Intent(context, SplashActivity::class.java)
-            (context as Activity).startActivity(intent)
-            (context as Activity).finish()
-            return
+        // Update death animation and transition to death screen
+        if (isDying) {
+            deathAnimationTime += dt
+            deathScreenFadeAlpha = min(deathScreenFadeAlpha + dt * 200f, 255f)
+
+            if (deathAnimationTime >= 1.5f) { // Death animation + delay
+                isDying = false
+                inDeathScreen = true
+            }
+            return // Don't update game while dying
+        }
+
+        if (inDeathScreen) {
+            return // Freeze game on death screen
         }
 
         if (!inGacha) {
@@ -412,6 +441,11 @@ class GameView(context: Context) : View(context) {
                 if (playerHp < 0) playerHp = 0
                 tookDamage = true
                 damageCooldown = 0.5f // Half second between damage ticks
+
+                // Trigger hit animation
+                isPlayingHitAnimation = true
+                hitAnimationTime = 0f
+                currentFrame = 0
             }
         }
 
@@ -422,6 +456,15 @@ class GameView(context: Context) : View(context) {
         // Update damage cooldown
         if (damageCooldown > 0f) {
             damageCooldown -= dt
+        }
+
+        // Update hit animation
+        if (isPlayingHitAnimation) {
+            hitAnimationTime += dt
+            if (hitAnimationTime >= 0.4f) { // Hit animation lasts 0.4 seconds
+                isPlayingHitAnimation = false
+                hitAnimationTime = 0f
+            }
         }
     }
 
@@ -448,9 +491,11 @@ class GameView(context: Context) : View(context) {
             b.x += b.vx * dt
             b.y += b.vy * dt
 
-            val w = width.toFloat()
-            val h = height.toFloat()
-            if (b.x < -100 || b.x > w + 100 || b.y < -100 || b.y > h + 100) {
+            // Remove bullets that are far from player (world coordinates, not screen coordinates)
+            val dx = b.x - playerX
+            val dy = b.y - playerY
+            val distFromPlayer = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+            if (distFromPlayer > 2000f) {
                 bulletIt.remove()
                 continue
             }
@@ -505,6 +550,43 @@ class GameView(context: Context) : View(context) {
                 bullets.add(Bullet(playerX, playerY, nx * bulletSpeed, ny * bulletSpeed))
                 fireCooldown = 1f / fireRate
             }
+        }
+    }
+
+    private fun resetGame() {
+        // Reset player state
+        playerHp = maxHp
+        killCount = 0
+        wave = 1
+
+        // Reset position
+        playerX = width / 2f
+        playerY = height / 2f
+        cameraX = 0f
+        cameraY = 0f
+
+        // Clear entities
+        enemies.clear()
+        bullets.clear()
+        blood.clear()
+
+        // Reset death screen
+        inDeathScreen = false
+        isDying = false
+        deathScreenFadeAlpha = 0f
+        deathAnimationTime = 0f
+
+        // Start first wave
+        enemies.clear()
+        val count = 8 + wave * 3
+        for (i in 0 until count) {
+            val angle = Random.nextFloat() * 2 * PI.toFloat()
+            val distance = 600f + Random.nextFloat() * 200f
+            val ex = playerX + cos(angle) * distance
+            val ey = playerY + sin(angle) * distance
+            val baseSpeed = 100f + wave * 15f
+            val hp = 30f + wave * 10f
+            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp))
         }
     }
 
@@ -620,6 +702,27 @@ class GameView(context: Context) : View(context) {
             }
         }
 
+        // Handle death screen button clicks
+        if (inDeathScreen && action == MotionEvent.ACTION_UP) {
+            val x = event.getX(index)
+            val y = event.getY(index)
+
+            when {
+                rebornButtonRect.contains(x, y) -> {
+                    // Reset game state for new run
+                    resetGame()
+                    return true
+                }
+                dieButtonRect.contains(x, y) -> {
+                    // Return to splash screen
+                    val intent = Intent(context, SplashActivity::class.java)
+                    (context as Activity).startActivity(intent)
+                    (context as Activity).finish()
+                    return true
+                }
+            }
+        }
+
         if (inGacha && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP)) {
             val x = event.getX(index)
             val y = event.getY(index)
@@ -728,8 +831,28 @@ class GameView(context: Context) : View(context) {
 
         // Draw player sprite
         val isMoving = joyActive && hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat() > 0.01f
-        val spriteSheet = if (isMoving) playerRunSprite else playerIdleSprite
-        val totalFrames = if (isMoving) 8 else 5
+
+        // Choose sprite based on state (death > hit > movement)
+        val spriteSheet: Bitmap
+        val totalFrames: Int
+        when {
+            isDying -> {
+                spriteSheet = playerDeathSprite
+                totalFrames = 4 // Death animation frames
+            }
+            isPlayingHitAnimation -> {
+                spriteSheet = playerHitSprite
+                totalFrames = 4 // Hit animation frames
+            }
+            isMoving -> {
+                spriteSheet = playerRunSprite
+                totalFrames = 8
+            }
+            else -> {
+                spriteSheet = playerIdleSprite
+                totalFrames = 5
+            }
+        }
 
         // Calculate frame size (sprites are vertical strip)
         val frameWidth = spriteSheet.width
@@ -841,6 +964,101 @@ class GameView(context: Context) : View(context) {
                 canvas.drawRoundRect(rect, 16f, 16f, cardBorderPaint)
                 canvas.drawText(opt.label, rect.left + 40f, rect.top + 60f, textPaint)
                 canvas.drawText(opt.desc, rect.left + 40f, rect.top + 110f, textPaint)
+            }
+        }
+
+        // Death screen overlay
+        if (inDeathScreen || isDying) {
+            // Fade to black (everything except player)
+            val deathOverlayPaint = Paint().apply {
+                color = Color.BLACK
+                alpha = deathScreenFadeAlpha.toInt().coerceIn(0, 255)
+            }
+            canvas.drawRect(0f, 0f, w, h, deathOverlayPaint)
+
+            if (inDeathScreen) {
+                // Kill count in big neon
+                val killCountPaint = Paint().apply {
+                    color = Color.MAGENTA
+                    textSize = 100f
+                    textAlign = Paint.Align.CENTER
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    isAntiAlias = true
+                    setShadowLayer(40f, 0f, 0f, Color.MAGENTA)
+                }
+                canvas.drawText("$killCount KILLS", w / 2f, h * 0.3f, killCountPaint)
+
+                // Button dimensions
+                val buttonWidth = w * 0.7f
+                val buttonHeight = 120f
+                val buttonCenterX = w / 2f
+
+                // Reborn button (top)
+                rebornButtonRect = RectF(
+                    buttonCenterX - buttonWidth / 2f,
+                    h * 0.5f,
+                    buttonCenterX + buttonWidth / 2f,
+                    h * 0.5f + buttonHeight
+                )
+
+                // Die button (bottom)
+                dieButtonRect = RectF(
+                    buttonCenterX - buttonWidth / 2f,
+                    h * 0.65f,
+                    buttonCenterX + buttonWidth / 2f,
+                    h * 0.65f + buttonHeight
+                )
+
+                val rebornBorderPaint = Paint().apply {
+                    color = Color.CYAN
+                    style = Paint.Style.STROKE
+                    strokeWidth = 6f
+                    isAntiAlias = true
+                    setShadowLayer(20f, 0f, 0f, Color.CYAN)
+                }
+
+                val dieBorderPaint = Paint().apply {
+                    color = Color.RED
+                    style = Paint.Style.STROKE
+                    strokeWidth = 6f
+                    isAntiAlias = true
+                    setShadowLayer(20f, 0f, 0f, Color.RED)
+                }
+
+                val rebornTextPaint = Paint().apply {
+                    color = Color.CYAN
+                    textSize = 60f
+                    textAlign = Paint.Align.CENTER
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    isAntiAlias = true
+                }
+
+                val dieTextPaint = Paint().apply {
+                    color = Color.RED
+                    textSize = 60f
+                    textAlign = Paint.Align.CENTER
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    isAntiAlias = true
+                }
+
+                // Draw buttons
+                canvas.drawRoundRect(rebornButtonRect, 20f, 20f, cardPaint)
+                canvas.drawRoundRect(rebornButtonRect, 20f, 20f, rebornBorderPaint)
+                canvas.drawText(
+                    "⚙ BE REBORN",
+                    rebornButtonRect.centerX(),
+                    rebornButtonRect.centerY() + 20f,
+                    rebornTextPaint
+                )
+
+                canvas.drawRoundRect(dieButtonRect, 20f, 20f, cardPaint)
+                canvas.drawRoundRect(dieButtonRect, 20f, 20f, dieBorderPaint)
+                canvas.drawText(
+                    "☠ DIE",
+                    dieButtonRect.centerX(),
+                    dieButtonRect.centerY() + 20f,
+                    dieTextPaint
+                )
             }
         }
 
