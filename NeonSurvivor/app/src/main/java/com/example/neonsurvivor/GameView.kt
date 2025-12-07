@@ -40,10 +40,10 @@ class GameView(context: Context) : View(context) {
     private var damageCooldown = 0f
 
     // Paints
-    private val bgPaint = Paint().apply { color = Color.BLACK }
+    private val bgPaint = Paint().apply { color = Color.rgb(5, 5, 15) } // Darker cyberpunk bg
     private val gridPaint = Paint().apply {
-        color = Color.argb(40, 0, 255, 0)
-        strokeWidth = 1f
+        color = Color.argb(60, 0, 255, 255) // Brighter cyan grid
+        strokeWidth = 2f
     }
     private val playerPaint = Paint().apply {
         color = Color.CYAN
@@ -56,11 +56,22 @@ class GameView(context: Context) : View(context) {
         strokeWidth = 4f
         isAntiAlias = true
     }
-    private val bulletPaint = Paint().apply {
-        color = Color.GREEN
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
+    private val enemyGlowPaint = Paint().apply {
+        color = Color.MAGENTA
+        style = Paint.Style.FILL
         isAntiAlias = true
+        maskFilter = BlurMaskFilter(20f, BlurMaskFilter.Blur.NORMAL) // Magenta glow
+    }
+    private val bulletPaint = Paint().apply {
+        color = Color.CYAN
+        style = Paint.Style.FILL
+        strokeWidth = 6f
+        isAntiAlias = true
+    }
+    private val bulletGlowPaint = Paint().apply {
+        color = Color.CYAN
+        isAntiAlias = true
+        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL) // Cyan bullet glow
     }
     private val bloodPaint = Paint().apply {
         color = Color.RED
@@ -110,16 +121,21 @@ class GameView(context: Context) : View(context) {
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
-    private val spriteSize = 64f // Size to render sprite
+    private val spriteSize = 192f // 3x larger sprite (was 64f)
     private val spritePaint = Paint().apply {
         isAntiAlias = false // Pixel art should not be antialiased
         isFilterBitmap = false // Keep crisp pixels
+    }
+    private val spriteGlowPaint = Paint().apply {
+        color = Color.CYAN
+        isAntiAlias = true
+        maskFilter = BlurMaskFilter(30f, BlurMaskFilter.Blur.NORMAL) // Neon glow
     }
 
     // Player
     private var playerX = 0f
     private var playerY = 0f
-    private var playerRadius = 32f // Adjusted to match sprite size
+    private var playerRadius = 96f // 3x larger hitbox (was 32f)
     private var playerSpeed = 250f  // Reduced from 300
     private var playerHp = 100
     private var maxHp = 100
@@ -166,6 +182,9 @@ class GameView(context: Context) : View(context) {
     init {
         isFocusable = true
         isClickable = true
+
+        // Enable software rendering for blur effects (BlurMaskFilter doesn't work with hardware acceleration)
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
 
         // Load player sprites
         playerIdleSprite = BitmapFactory.decodeResource(resources, R.drawable.player_idle)
@@ -684,10 +703,14 @@ class GameView(context: Context) : View(context) {
         }
 
         for (b in bullets) {
+            // Neon glow effect
+            canvas.drawCircle(b.x, b.y, 12f, bulletGlowPaint)
             canvas.drawCircle(b.x, b.y, 6f, bulletPaint)
         }
 
         for (e in enemies) {
+            // Neon glow effect
+            canvas.drawCircle(e.x, e.y, e.radius + 10f, enemyGlowPaint)
             canvas.drawCircle(e.x, e.y, e.radius, enemyPaint)
         }
 
@@ -715,6 +738,9 @@ class GameView(context: Context) : View(context) {
             playerX + spriteSize / 2f,
             playerY + spriteSize / 2f
         )
+
+        // Draw neon glow behind sprite
+        canvas.drawCircle(playerX, playerY, spriteSize / 2f, spriteGlowPaint)
 
         canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
 
