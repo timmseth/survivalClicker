@@ -33,6 +33,8 @@ jobs:
           path: NeonSurvivor/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Send APK via Email
+        continue-on-error: true
+        if: ${{ secrets.MAIL_TO != '' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
