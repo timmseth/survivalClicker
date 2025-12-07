@@ -323,10 +323,9 @@ class SplashScreenView(context: Context) : View(context) {
                 }
 
                 if (settingsButtonRect.contains(x, y)) {
-                    // TODO: Settings screen (for now, just start game)
-                    val intent = Intent(context, MainActivity::class.java)
+                    // Open settings
+                    val intent = Intent(context, SettingsActivity::class.java)
                     (context as Activity).startActivity(intent)
-                    (context as Activity).finish()
                     return true
                 }
             }

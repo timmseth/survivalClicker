@@ -18,9 +18,15 @@ class GameView(context: Context) : View(context) {
     private var lastTimeNs: Long = System.nanoTime()
     private var running: Boolean = true
     private var initialized: Boolean = false
+    private var isPaused: Boolean = false
+    private var countdownValue: Int = 0
+    private var countdownAlpha: Float = 0f
 
     // Vibration
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+
+    // Settings icon
+    private var settingsIconRect = RectF()
 
     // Screen shake & damage feedback
     private var screenShakeX = 0f
@@ -149,6 +155,12 @@ class GameView(context: Context) : View(context) {
     fun resume() {
         running = true
         if (initialized) {
+            if (isPaused) {
+                // Start 3-2-1 countdown on unpause
+                isPaused = false
+                countdownValue = 3
+                countdownAlpha = 1f
+            }
             lastTimeNs = System.nanoTime()
             postInvalidateOnAnimation()
         }
@@ -161,7 +173,22 @@ class GameView(context: Context) : View(context) {
             playerY = h / 2f
             joyBaseX = w * 0.18f
             joyBaseY = h * 0.8f
+
+            // Settings icon in top-right corner
+            val iconSize = 60f
+            settingsIconRect = RectF(
+                w - iconSize - 20f,
+                20f,
+                w - 20f,
+                20f + iconSize
+            )
+
             spawnWave()
+
+            // Start audio
+            AudioManager.startMusic(context)
+            AudioManager.startRain(context)
+
             lastTimeNs = System.nanoTime()
             running = true
             initialized = true
@@ -185,8 +212,17 @@ class GameView(context: Context) : View(context) {
         if (dt > 0.05f) dt = 0.05f
         lastTimeNs = now
 
-        if (running) {
-            update(dt)
+        if (running && !isPaused) {
+            // Handle countdown
+            if (countdownValue > 0) {
+                countdownAlpha -= dt * 2f
+                if (countdownAlpha <= 0f) {
+                    countdownValue--
+                    countdownAlpha = 1f
+                }
+            } else {
+                update(dt)
+            }
         }
 
         drawInternal(canvas)
@@ -198,8 +234,8 @@ class GameView(context: Context) : View(context) {
 
     private fun spawnWave() {
         enemies.clear()
-        // Increased enemy count: was 5 + wave*2, now 8 + wave*3
-        val count = 8 + wave * 3
+        // Better curve: starts at 5, slower growth for early waves
+        val count = 5 + (wave * wave) / 2
         val rnd = Random(System.currentTimeMillis())
         for (i in 0 until count) {
             val edge = rnd.nextInt(4)
@@ -489,6 +525,19 @@ class GameView(context: Context) : View(context) {
         val action = event.actionMasked
         val index = event.actionIndex
 
+        // Check settings icon tap (not paused or in gacha)
+        if (action == MotionEvent.ACTION_UP && !inGacha) {
+            val x = event.getX(index)
+            val y = event.getY(index)
+            if (settingsIconRect.contains(x, y)) {
+                isPaused = true
+                val intent = Intent(context, SettingsActivity::class.java)
+                (context as Activity).startActivity(intent)
+                // Will unpause in onResume
+                return true
+            }
+        }
+
         if (inGacha && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP)) {
             val x = event.getX(index)
             val y = event.getY(index)
@@ -585,6 +634,24 @@ class GameView(context: Context) : View(context) {
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
         canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
 
+        // Settings icon (gear icon)
+        val iconPaint = Paint().apply {
+            color = Color.argb(200, 100, 200, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 20f, iconPaint)
+        for (i in 0..7) {
+            val angle = i * 45f
+            val rad = Math.toRadians(angle.toDouble())
+            val x1 = settingsIconRect.centerX() + cos(rad).toFloat() * 16f
+            val y1 = settingsIconRect.centerY() + sin(rad).toFloat() * 16f
+            val x2 = settingsIconRect.centerX() + cos(rad).toFloat() * 24f
+            val y2 = settingsIconRect.centerY() + sin(rad).toFloat() * 24f
+            canvas.drawLine(x1, y1, x2, y2, iconPaint)
+        }
+
         if (joyActive) {
             canvas.drawCircle(joyBaseX, joyBaseY, joyBaseRadius, joyBasePaint)
             val knobX = joyBaseX + joyDx
@@ -626,6 +693,19 @@ class GameView(context: Context) : View(context) {
         if (damageFlashAlpha > 0f) {
             damageOverlayPaint.alpha = damageFlashAlpha.toInt()
             canvas.drawRect(0f, 0f, w, h, damageOverlayPaint)
+        }
+
+        // Draw countdown
+        if (countdownValue > 0) {
+            val countdownPaint = Paint().apply {
+                color = Color.CYAN
+                textSize = 200f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                alpha = (255 * countdownAlpha).toInt()
+            }
+            canvas.drawText(countdownValue.toString(), w / 2f, h / 2f + 70f, countdownPaint)
         }
     }
 }

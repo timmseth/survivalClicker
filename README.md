@@ -48,7 +48,7 @@ A cyberpunk-themed survival roguelike for Android, inspired by Vampire Survivors
 - ✅ Email delivery of APK builds
 
 ### Planned Features
-- 🎵 **Procedural Music** - Strudel/Tidal Cycles integration for generative cyberpunk soundtrack
+- 🎵 **Custom Music System** - Strudel/Tidal Cycles integration for advanced generative cyberpunk soundtrack
 - 🎮 **Joystick Enhancement** - Make joystick work anywhere on screen (currently left-bottom half)
 - 🎨 **Visual Upgrades**
   - Darker in-game background (more cyberpunk atmosphere)
