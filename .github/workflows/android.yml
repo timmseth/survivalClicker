@@ -21,6 +21,8 @@ jobs:
 
       - name: Build with Gradle
         uses: gradle/gradle-build-action@v3
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
         with:
           gradle-version: 8.7
           arguments: assembleDebug

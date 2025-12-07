@@ -9,8 +9,9 @@ android {
         applicationId "com.example.neonsurvivor"
         minSdkVersion 24
         targetSdkVersion 34
-        versionCode 1
-        versionName "1.0"
+        // Auto-increment version code from GitHub Actions run number
+        versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+        versionName "1.0.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
     }
 
     buildTypes {
