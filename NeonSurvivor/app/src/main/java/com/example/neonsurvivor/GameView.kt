@@ -104,10 +104,22 @@ class GameView(context: Context) : View(context) {
         style = Paint.Style.FILL
     }
 
+    // Player sprite animation
+    private val playerIdleSprite: Bitmap
+    private val playerRunSprite: Bitmap
+    private var spriteFrameTime = 0f
+    private var currentFrame = 0
+    private val frameDelay = 0.1f // 10 FPS animation
+    private val spriteSize = 64f // Size to render sprite
+    private val spritePaint = Paint().apply {
+        isAntiAlias = false // Pixel art should not be antialiased
+        isFilterBitmap = false // Keep crisp pixels
+    }
+
     // Player
     private var playerX = 0f
     private var playerY = 0f
-    private var playerRadius = 30f
+    private var playerRadius = 32f // Adjusted to match sprite size
     private var playerSpeed = 250f  // Reduced from 300
     private var playerHp = 100
     private var maxHp = 100
@@ -154,6 +166,10 @@ class GameView(context: Context) : View(context) {
     init {
         isFocusable = true
         isClickable = true
+
+        // Load player sprites
+        playerIdleSprite = BitmapFactory.decodeResource(resources, R.drawable.player_idle)
+        playerRunSprite = BitmapFactory.decodeResource(resources, R.drawable.player_run)
     }
 
     fun pause() {
@@ -310,6 +326,7 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun updatePlayer(dt: Float) {
+        var isMoving = false
         if (joyActive) {
             val len = hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat()
             if (len > 0.01f) {
@@ -317,6 +334,24 @@ class GameView(context: Context) : View(context) {
                 val ny = joyDy / len
                 playerX += nx * playerSpeed * dt
                 playerY += ny * playerSpeed * dt
+                isMoving = true
+            }
+        }
+
+        // Update sprite animation
+        if (isMoving) {
+            spriteFrameTime += dt
+            if (spriteFrameTime >= frameDelay) {
+                spriteFrameTime = 0f
+                // Run sprite has 8 frames
+                currentFrame = (currentFrame + 1) % 8
+            }
+        } else {
+            spriteFrameTime += dt
+            if (spriteFrameTime >= frameDelay) {
+                spriteFrameTime = 0f
+                // Idle sprite has 5 frames
+                currentFrame = (currentFrame + 1) % 5
             }
         }
 
@@ -656,7 +691,32 @@ class GameView(context: Context) : View(context) {
             canvas.drawCircle(e.x, e.y, e.radius, enemyPaint)
         }
 
-        canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
+        // Draw player sprite
+        val isMoving = joyActive && hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat() > 0.01f
+        val spriteSheet = if (isMoving) playerRunSprite else playerIdleSprite
+        val totalFrames = if (isMoving) 8 else 5
+
+        // Calculate frame size (sprites are vertical strip)
+        val frameWidth = spriteSheet.width
+        val frameHeight = spriteSheet.height / totalFrames
+
+        // Source rect for current frame
+        val srcRect = Rect(
+            0,
+            currentFrame * frameHeight,
+            frameWidth,
+            (currentFrame + 1) * frameHeight
+        )
+
+        // Destination rect (where to draw on screen)
+        val dstRect = RectF(
+            playerX - spriteSize / 2f,
+            playerY - spriteSize / 2f,
+            playerX + spriteSize / 2f,
+            playerY + spriteSize / 2f
+        )
+
+        canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
 
         // Restore canvas from camera and screen shake
         canvas.restore()
