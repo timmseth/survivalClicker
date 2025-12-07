@@ -15,6 +15,7 @@ class GameView(context: Context) : View(context) {
     // Timing
     private var lastTimeNs: Long = System.nanoTime()
     private var running: Boolean = true
+    private var initialized: Boolean = false
 
     // Vibration
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -144,29 +145,38 @@ class GameView(context: Context) : View(context) {
     }
 
     fun resume() {
-        if (!running) {
-            running = true
+        running = true
+        if (initialized) {
             lastTimeNs = System.nanoTime()
             postInvalidateOnAnimation()
         }
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        playerX = width / 2f
-        playerY = height / 2f
-        joyBaseX = width * 0.18f
-        joyBaseY = height * 0.8f
-        spawnWave()
-        lastTimeNs = System.nanoTime()
-        running = true
-        postInvalidateOnAnimation()
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (!initialized && w > 0 && h > 0) {
+            playerX = w / 2f
+            playerY = h / 2f
+            joyBaseX = w * 0.18f
+            joyBaseY = h * 0.8f
+            spawnWave()
+            lastTimeNs = System.nanoTime()
+            running = true
+            initialized = true
+            postInvalidateOnAnimation()
+        }
     }
 
     // --- Game loop via onDraw ---
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        if (!initialized) {
+            // no size yet; just draw black
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+            return
+        }
 
         val now = System.nanoTime()
         var dt = (now - lastTimeNs) / 1_000_000_000f

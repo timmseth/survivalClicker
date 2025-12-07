@@ -1,9 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(unzip:*)",
-      "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nCycle 1: Add critical damage feedback system\n\nIMPROVEMENTS:\n- Screen shake effect when taking damage (camera shake with decay)\n- Red damage flash overlay that fades out\n- Haptic vibration on hit (50ms pulse)\n- Damage rebalanced: 25 damage per 0.5s cooldown (was continuous 15/sec)\n- Added damage cooldown to prevent instant death\n\nTECHNICAL:\n- Added Vibrator service integration\n- New damage feedback system with updateScreenEffects()\n- Canvas save/restore for screen shake transform\n- Damage overlay paint with dynamic alpha\n\nFIXES:\n- Damage is now clearly noticeable\n- Player can feel when being hit\n- More fair damage timing with cooldown\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
