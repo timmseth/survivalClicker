@@ -31,3 +31,26 @@ jobs:
         with:
           name: neon-survivor-apk
           path: NeonSurvivor/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Send APK via Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "🎮 Neon Survivor APK Build #${{ github.run_number }} Ready!"
+          to: ${{ secrets.MAIL_TO }}
+          from: Neon Survivor CI
+          body: |
+            Build #${{ github.run_number }} completed successfully!
+
+            Commit: ${{ github.sha }}
+            Message: ${{ github.event.head_commit.message }}
+            Branch: ${{ github.ref }}
+
+            APK is attached - install and test!
+
+            View build: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          attachments: NeonSurvivor/app/build/outputs/apk/debug/app-debug.apk
