@@ -33,7 +33,7 @@ class SettingsView(context: Context) : View(context) {
 
     private var musicEnabled = prefs.getBoolean("music_enabled", true)
     private var soundEnabled = prefs.getBoolean("sound_enabled", true)
-    private var musicVolume = prefs.getFloat("music_volume", 0.3f)
+    private var musicVolume = prefs.getFloat("music_volume", 0.12f)
     private var rainVolume = prefs.getFloat("rain_volume", 1.0f)
 
     // Paints
@@ -123,9 +123,9 @@ class SettingsView(context: Context) : View(context) {
             startX + toggleWidth, h * 0.50f + toggleHeight
         )
 
-        // Volume sliders
+        // Volume sliders (tripled height for easier touch)
         val sliderWidth = w * 0.5f
-        val sliderHeight = 20f
+        val sliderHeight = 60f
         val sliderStartX = w * 0.3f
 
         musicVolumeSliderRect = RectF(
@@ -134,8 +134,8 @@ class SettingsView(context: Context) : View(context) {
         )
 
         rainVolumeSliderRect = RectF(
-            sliderStartX, h * 0.57f,
-            sliderStartX + sliderWidth, h * 0.57f + sliderHeight
+            sliderStartX, h * 0.58f,
+            sliderStartX + sliderWidth, h * 0.58f + sliderHeight
         )
 
         // Back button

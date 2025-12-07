@@ -175,8 +175,7 @@ class GameView(context: Context) : View(context) {
         if (!initialized && w > 0 && h > 0) {
             playerX = w / 2f
             playerY = h / 2f
-            joyBaseX = w * 0.18f
-            joyBaseY = h * 0.8f
+            // Floating joystick - no fixed position, appears where user touches
 
             // Settings icon in top-right corner
             val iconSize = 60f
@@ -561,7 +560,8 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val x = event.getX(index)
                 val y = event.getY(index)
-                if (x < width * 0.5f && y > height * 0.5f && joyPointerId == -1) {
+                // Floating joystick: appears anywhere on left 2/3 of screen
+                if (x < width * 0.67f && joyPointerId == -1) {
                     joyPointerId = event.getPointerId(index)
                     joyBaseX = x
                     joyBaseY = y
@@ -689,9 +689,8 @@ class GameView(context: Context) : View(context) {
             val knobX = joyBaseX + joyDx
             val knobY = joyBaseY + joyDy
             canvas.drawCircle(knobX, knobY, joyKnobRadius, joyKnobPaint)
-        } else {
-            canvas.drawCircle(joyBaseX, joyBaseY, joyBaseRadius * 0.5f, joyBasePaint)
         }
+        // No inactive joystick indicator for floating joystick
 
         if (inGacha) {
             canvas.drawRect(0f, 0f, w, h, overlayPaint)

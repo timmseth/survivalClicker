@@ -19,7 +19,7 @@ object AudioManager {
 
     private val sampleRate = 44100
 
-    var musicVolume = 0.3f // 0.0 to 1.0 (default 30%)
+    var musicVolume = 0.12f // 0.0 to 1.0 (default 12% to match rain at 100%)
     var rainVolume = 1.0f // 0.0 to 1.0 (default 100%)
 
     fun startMusic(context: Context) {
@@ -29,7 +29,7 @@ object AudioManager {
         if (!prefs.getBoolean("music_enabled", true)) return
 
         // Load saved volume
-        musicVolume = prefs.getFloat("music_volume", 0.3f)
+        musicVolume = prefs.getFloat("music_volume", 0.12f)
 
         isPlaying = true
 
@@ -192,7 +192,7 @@ object AudioManager {
                         brownState = (brownState + white * 0.02) * 0.98 // Brown noise filter
                         val softFiltered = brownState * 0.08 // Much quieter, softer
 
-                        buffer[i] = (softFiltered * 4000 * rainVolume).toInt().coerceIn(-32768, 32767).toShort()
+                        buffer[i] = (softFiltered * 8000 * rainVolume).toInt().coerceIn(-32768, 32767).toShort()
                     }
 
                     rainTrack?.write(buffer, 0, buffer.size)
