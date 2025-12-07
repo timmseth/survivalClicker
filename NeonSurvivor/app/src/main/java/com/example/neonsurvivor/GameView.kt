@@ -14,6 +14,14 @@ import kotlin.random.Random
 
 class GameView(context: Context) : View(context) {
 
+    // Entity caps for performance and balance
+    companion object {
+        private const val MAX_ENEMIES = 35
+        private const val MAX_BULLETS = 200
+        private const val MAX_POWERUPS = 12
+        private const val MAX_BLOOD_PARTICLES = 150
+    }
+
     // Timing
     private var lastTimeNs: Long = System.nanoTime()
     private var running: Boolean = true
@@ -275,6 +283,7 @@ class GameView(context: Context) : View(context) {
     private val bullets = mutableListOf<Bullet>()
     private val blood = mutableListOf<BloodParticle>()
     private val powerUps = mutableListOf<PowerUp>()
+    private val guaranteedDropEnemies = mutableSetOf<Enemy>()
 
     // Waves + gacha
     private var wave = 1
@@ -399,24 +408,40 @@ class GameView(context: Context) : View(context) {
 
     private fun spawnWave() {
         enemies.clear()
-        // Better curve: starts at 5, slower growth for early waves
-        val count = 5 + (wave * wave) / 2
+
         val rnd = Random(System.currentTimeMillis())
+        val isBreatherWave = wave % 5 == 0 && wave > 0
+
+        // Logarithmic scaling with soft cap at MAX_ENEMIES
+        val baseCount = 8 + (wave * 3f) / (1f + wave * 0.05f)
+        val count = if (isBreatherWave) {
+            // Breather wave: 60% normal count but guaranteed loot
+            (baseCount * 0.6f).toInt()
+        } else {
+            min(baseCount.toInt(), MAX_ENEMIES)
+        }
+
         for (i in 0 until count) {
             val edge = rnd.nextInt(4)
             val ex: Float
             val ey: Float
-            // Spawn in world coordinates relative to player position (not screen coordinates)
+            // Spawn in world coordinates relative to player position
             when (edge) {
                 0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
                 1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
                 2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
                 else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
             }
-            // Faster and tankier: base speed 100 (was 60), scaling 15/wave (was 10)
-            val baseSpeed = 100f + wave * 15f
-            // HP scaling increased: 10/wave (was 5)
-            val hp = 30f + wave * 10f
+
+            // Logarithmic HP scaling (slows down at high waves)
+            val hp = 30f + sqrt(wave.toFloat()) * 20f
+
+            // Speed caps at 350f to keep game playable
+            val baseSpeed = min(100f + wave * 8f, 350f)
+
+            // Elite enemies after wave 10: 20% chance for 2x HP, guaranteed drop
+            val isElite = wave >= 10 && rnd.nextFloat() < 0.2f
+            val finalHp = if (isElite) hp * 2f else hp
 
             // Progressive polygon introduction based on wave
             val enemyType = when {
@@ -442,8 +467,16 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
-            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, hp, enemyType))
+            val enemy = Enemy(ex, ey, 24f, baseSpeed, finalHp, finalHp, enemyType)
+
+            // Tag elite enemies for guaranteed drops (store in a set)
+            if (isElite || isBreatherWave) {
+                guaranteedDropEnemies.add(enemy)
+            }
+
+            enemies.add(enemy)
         }
+
         if (playerHp <= 0) {
             playerHp = maxHp
         }
@@ -671,8 +704,18 @@ class GameView(context: Context) : View(context) {
                         bulletIt.remove() // Remove bullet unless piercing
                     }
                     if (hitEnemy.hp <= 0f) {
-                        // Enemy died - chance to drop power-up based on enemy type
-                        if (Random.nextFloat() < hitEnemy.getDropChance()) {
+                        // Check if powerup cap allows spawning
+                        val canSpawnPowerup = powerUps.size < MAX_POWERUPS
+
+                        // Guaranteed drop for elite/breather enemies, or normal chance
+                        val shouldDrop = if (guaranteedDropEnemies.contains(hitEnemy)) {
+                            guaranteedDropEnemies.remove(hitEnemy)
+                            true
+                        } else {
+                            Random.nextFloat() < hitEnemy.getDropChance()
+                        }
+
+                        if (shouldDrop && canSpawnPowerup) {
                             val powerUpType = PowerUpType.values()[Random.nextInt(PowerUpType.values().size)]
                             powerUps.add(PowerUp(hitEnemy.x, hitEnemy.y, powerUpType))
                         }
@@ -739,6 +782,12 @@ class GameView(context: Context) : View(context) {
             val dy = it.y - playerY
             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
             if (dist > 1f) {
+                // Check bullet cap before firing
+                if (bullets.size >= MAX_BULLETS) {
+                    fireCooldown = 0.1f // Try again very soon
+                    return
+                }
+
                 val nx = dx / dist
                 val ny = dy / dist
                 val bulletSpeed = 700f
@@ -753,6 +802,7 @@ class GameView(context: Context) : View(context) {
                     for (shot in 0 until totalShots) {
                         val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.2f else 0f
                         for (i in -1..1) {
+                            if (bullets.size >= MAX_BULLETS) break
                             val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle + angleOffset
                             val vx = cos(angle) * bulletSpeed
                             val vy = sin(angle) * bulletSpeed
@@ -762,6 +812,7 @@ class GameView(context: Context) : View(context) {
                 } else {
                     // Fire multiple shots in a tight spread
                     for (shot in 0 until totalShots) {
+                        if (bullets.size >= MAX_BULLETS) break
                         val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.15f else 0f
                         val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + angleOffset
                         val vx = cos(angle) * bulletSpeed
@@ -777,10 +828,19 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun handleEnemyShooting(dt: Float) {
+        // Dynamic cooldown based on enemy count to reduce bullet spam
+        val crowdPenalty = (enemies.size / 25f).coerceIn(0f, 3f)
+
         for (e in enemies) {
             val cornerCount = e.getCornerCount()
 
             if (e.shootCooldown <= 0f) {
+                // Check bullet cap before allowing shooting
+                if (bullets.size >= MAX_BULLETS) {
+                    e.shootCooldown = 1f // Try again in 1 second
+                    continue
+                }
+
                 if (cornerCount == 0) {
                     // Circles fire one slow shot toward player after delay
                     val dx = playerX - e.x
@@ -792,18 +852,19 @@ class GameView(context: Context) : View(context) {
                         val vy = (dy / dist) * bulletSpeed
                         bullets.add(Bullet(e.x, e.y, vx, vy, false))
                     }
-                    e.shootCooldown = 4f // Shoot every 4 seconds (longer delay)
+                    e.shootCooldown = 4f + crowdPenalty // Longer when crowded
                 } else {
                     // Polygon enemies shoot bullets equal to corner count
                     val angleStep = (2f * PI.toFloat()) / cornerCount
                     for (i in 0 until cornerCount) {
+                        if (bullets.size >= MAX_BULLETS) break
                         val angle = angleStep * i
                         val bulletSpeed = 200f // Slow dodgeable bullets
                         val vx = cos(angle) * bulletSpeed
                         val vy = sin(angle) * bulletSpeed
                         bullets.add(Bullet(e.x, e.y, vx, vy, false))
                     }
-                    e.shootCooldown = 3f // Shoot every 3 seconds
+                    e.shootCooldown = 3f + crowdPenalty // Longer when crowded
                 }
             }
         }
@@ -943,8 +1004,17 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun spawnBlood(x: Float, y: Float) {
+        // Respect blood particle cap for performance
+        if (blood.size >= MAX_BLOOD_PARTICLES) {
+            // Remove oldest particles to make room
+            if (blood.isNotEmpty()) {
+                blood.removeAt(0)
+            }
+        }
+
         val rnd = Random(System.nanoTime())
-        for (i in 0 until 12) {
+        val particleCount = min(12, MAX_BLOOD_PARTICLES - blood.size)
+        for (i in 0 until particleCount) {
             val angle = rnd.nextFloat() * (2f * Math.PI.toFloat())
             val speed = 80f + rnd.nextFloat() * 120f
             val vx = cos(angle) * speed
