@@ -1,6 +1,7 @@
 package com.example.neonsurvivor
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.os.Bundle
@@ -26,8 +27,9 @@ class SplashActivity : Activity() {
         splashView = SplashScreenView(this)
         setContentView(splashView)
     }
+}
 
-    inner class SplashScreenView(context: android.content.Context) : View(context) {
+class SplashScreenView(context: Context) : View(context) {
 
         private var lastTimeNs: Long = System.nanoTime()
         private var elapsedTime = 0f
@@ -314,21 +316,20 @@ class SplashActivity : Activity() {
 
                 if (startButtonRect.contains(x, y)) {
                     // Start game
-                    val intent = Intent(this@SplashActivity, MainActivity::class.java)
-                    startActivity(intent)
-                    finish()
+                    val intent = Intent(context, MainActivity::class.java)
+                    (context as Activity).startActivity(intent)
+                    (context as Activity).finish()
                     return true
                 }
 
                 if (settingsButtonRect.contains(x, y)) {
                     // TODO: Settings screen (for now, just start game)
-                    val intent = Intent(this@SplashActivity, MainActivity::class.java)
-                    startActivity(intent)
-                    finish()
+                    val intent = Intent(context, MainActivity::class.java)
+                    (context as Activity).startActivity(intent)
+                    (context as Activity).finish()
                     return true
                 }
             }
             return true
         }
     }
-}
