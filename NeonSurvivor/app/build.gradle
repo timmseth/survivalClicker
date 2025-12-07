@@ -15,7 +15,20 @@ android {
         versionName runNumber != null ? "1.0.${runNumber}" : "1.0.0"
     }
 
+    signingConfigs {
+        debug {
+            // Use the default Android debug keystore for consistent signing
+            storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

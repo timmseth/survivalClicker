@@ -33,6 +33,8 @@ class SettingsView(context: Context) : View(context) {
 
     private var musicEnabled = prefs.getBoolean("music_enabled", true)
     private var soundEnabled = prefs.getBoolean("sound_enabled", true)
+    private var musicVolume = prefs.getFloat("music_volume", 0.3f)
+    private var rainVolume = prefs.getFloat("rain_volume", 1.0f)
 
     // Paints
     private val bgPaint = Paint()
@@ -79,7 +81,12 @@ class SettingsView(context: Context) : View(context) {
     // UI elements
     private var musicToggleRect = RectF()
     private var soundToggleRect = RectF()
+    private var musicVolumeSliderRect = RectF()
+    private var rainVolumeSliderRect = RectF()
     private var backButtonRect = RectF()
+
+    private var draggingMusicSlider = false
+    private var draggingRainSlider = false
 
     init {
         isFocusable = true
@@ -114,6 +121,21 @@ class SettingsView(context: Context) : View(context) {
         soundToggleRect = RectF(
             startX, h * 0.50f,
             startX + toggleWidth, h * 0.50f + toggleHeight
+        )
+
+        // Volume sliders
+        val sliderWidth = w * 0.5f
+        val sliderHeight = 20f
+        val sliderStartX = w * 0.3f
+
+        musicVolumeSliderRect = RectF(
+            sliderStartX, h * 0.42f,
+            sliderStartX + sliderWidth, h * 0.42f + sliderHeight
+        )
+
+        rainVolumeSliderRect = RectF(
+            sliderStartX, h * 0.57f,
+            sliderStartX + sliderWidth, h * 0.57f + sliderHeight
         )
 
         // Back button
@@ -159,6 +181,43 @@ class SettingsView(context: Context) : View(context) {
             soundToggleRect.centerX(), soundToggleRect.centerY() + 18f, labelPaint)
         labelPaint.textAlign = Paint.Align.LEFT
 
+        // Music volume slider
+        val sliderLabelPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 35f
+            isAntiAlias = true
+        }
+        canvas.drawText("Music Vol: ${(musicVolume * 100).toInt()}%",
+            w * 0.3f, musicVolumeSliderRect.top - 10f, sliderLabelPaint)
+
+        // Slider track
+        canvas.drawRoundRect(musicVolumeSliderRect, 10f, 10f, buttonBgPaint)
+        canvas.drawRoundRect(musicVolumeSliderRect, 10f, 10f, buttonBorderPaint)
+
+        // Slider fill
+        val musicFillWidth = musicVolumeSliderRect.width() * musicVolume
+        canvas.drawRoundRect(
+            musicVolumeSliderRect.left, musicVolumeSliderRect.top,
+            musicVolumeSliderRect.left + musicFillWidth, musicVolumeSliderRect.bottom,
+            10f, 10f, toggleOnPaint
+        )
+
+        // Rain volume slider
+        canvas.drawText("Rain Vol: ${(rainVolume * 100).toInt()}%",
+            w * 0.3f, rainVolumeSliderRect.top - 10f, sliderLabelPaint)
+
+        // Slider track
+        canvas.drawRoundRect(rainVolumeSliderRect, 10f, 10f, buttonBgPaint)
+        canvas.drawRoundRect(rainVolumeSliderRect, 10f, 10f, buttonBorderPaint)
+
+        // Slider fill
+        val rainFillWidth = rainVolumeSliderRect.width() * rainVolume
+        canvas.drawRoundRect(
+            rainVolumeSliderRect.left, rainVolumeSliderRect.top,
+            rainVolumeSliderRect.left + rainFillWidth, rainVolumeSliderRect.bottom,
+            10f, 10f, toggleOnPaint
+        )
+
         // Back button
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBgPaint)
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBorderPaint)
@@ -168,43 +227,86 @@ class SettingsView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP) {
-            val x = event.x
-            val y = event.y
+        val x = event.x
+        val y = event.y
 
-            when {
-                musicToggleRect.contains(x, y) -> {
-                    musicEnabled = !musicEnabled
-                    prefs.edit().putBoolean("music_enabled", musicEnabled).apply()
-
-                    // Toggle music
-                    if (musicEnabled) {
-                        AudioManager.startMusic(context)
-                    } else {
-                        AudioManager.stopMusic()
-                    }
-                    invalidate()
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                if (musicVolumeSliderRect.contains(x, y)) {
+                    draggingMusicSlider = true
+                    updateMusicVolume(x)
                     return true
                 }
-                soundToggleRect.contains(x, y) -> {
-                    soundEnabled = !soundEnabled
-                    prefs.edit().putBoolean("sound_enabled", soundEnabled).apply()
-
-                    // Toggle rain sound
-                    if (soundEnabled) {
-                        AudioManager.startRain(context)
-                    } else {
-                        AudioManager.stopRain()
-                    }
-                    invalidate()
+                if (rainVolumeSliderRect.contains(x, y)) {
+                    draggingRainSlider = true
+                    updateRainVolume(x)
                     return true
                 }
-                backButtonRect.contains(x, y) -> {
-                    (context as Activity).finish()
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (draggingMusicSlider) {
+                    updateMusicVolume(x)
                     return true
+                }
+                if (draggingRainSlider) {
+                    updateRainVolume(x)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                draggingMusicSlider = false
+                draggingRainSlider = false
+
+                when {
+                    musicToggleRect.contains(x, y) -> {
+                        musicEnabled = !musicEnabled
+                        prefs.edit().putBoolean("music_enabled", musicEnabled).apply()
+
+                        // Toggle music
+                        if (musicEnabled) {
+                            AudioManager.startMusic(context)
+                        } else {
+                            AudioManager.stopMusic()
+                        }
+                        invalidate()
+                        return true
+                    }
+                    soundToggleRect.contains(x, y) -> {
+                        soundEnabled = !soundEnabled
+                        prefs.edit().putBoolean("sound_enabled", soundEnabled).apply()
+
+                        // Toggle rain sound
+                        if (soundEnabled) {
+                            AudioManager.startRain(context)
+                        } else {
+                            AudioManager.stopRain()
+                        }
+                        invalidate()
+                        return true
+                    }
+                    backButtonRect.contains(x, y) -> {
+                        (context as Activity).finish()
+                        return true
+                    }
                 }
             }
         }
         return true
+    }
+
+    private fun updateMusicVolume(x: Float) {
+        val ratio = ((x - musicVolumeSliderRect.left) / musicVolumeSliderRect.width()).coerceIn(0f, 1f)
+        musicVolume = ratio
+        AudioManager.musicVolume = musicVolume
+        prefs.edit().putFloat("music_volume", musicVolume).apply()
+        invalidate()
+    }
+
+    private fun updateRainVolume(x: Float) {
+        val ratio = ((x - rainVolumeSliderRect.left) / rainVolumeSliderRect.width()).coerceIn(0f, 1f)
+        rainVolume = ratio
+        AudioManager.rainVolume = rainVolume
+        prefs.edit().putFloat("rain_volume", rainVolume).apply()
+        invalidate()
     }
 }

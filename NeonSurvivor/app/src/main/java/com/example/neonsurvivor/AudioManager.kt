@@ -19,11 +19,17 @@ object AudioManager {
 
     private val sampleRate = 44100
 
+    var musicVolume = 0.3f // 0.0 to 1.0 (default 30%)
+    var rainVolume = 1.0f // 0.0 to 1.0 (default 100%)
+
     fun startMusic(context: Context) {
         if (isPlaying) return
 
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("music_enabled", true)) return
+
+        // Load saved volume
+        musicVolume = prefs.getFloat("music_volume", 0.3f)
 
         isPlaying = true
 
@@ -95,7 +101,7 @@ object AudioManager {
                         // Simple low-pass filter to soften harsh edges
                         lowPassState = lowPassState * 0.7 + mixed * 0.3
 
-                        buffer[i] = (lowPassState * 6000).toInt().coerceIn(-32768, 32767).toShort()
+                        buffer[i] = (lowPassState * 6000 * musicVolume).toInt().coerceIn(-32768, 32767).toShort()
                     }
 
                     musicTrack?.write(buffer, 0, buffer.size)
@@ -127,6 +133,9 @@ object AudioManager {
 
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("sound_enabled", true)) return
+
+        // Load saved volume
+        rainVolume = prefs.getFloat("rain_volume", 1.0f)
 
         rainPlaying = true
 
@@ -183,7 +192,7 @@ object AudioManager {
                         brownState = (brownState + white * 0.02) * 0.98 // Brown noise filter
                         val softFiltered = brownState * 0.08 // Much quieter, softer
 
-                        buffer[i] = (softFiltered * 2000).toInt().coerceIn(-32768, 32767).toShort()
+                        buffer[i] = (softFiltered * 4000 * rainVolume).toInt().coerceIn(-32768, 32767).toShort()
                     }
 
                     rainTrack?.write(buffer, 0, buffer.size)
