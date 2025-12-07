@@ -316,7 +316,7 @@ class SplashScreenView(context: Context) : View(context) {
                 killCounterPaint.alpha = (255 * flicker).toInt().coerceIn(150, 255)
                 killCounterPaint.setShadowLayer(40f, 0f, 0f, color)
 
-                canvas.drawText("$highScore KILLS", centerX, centerY + 180f, killCounterPaint)
+                canvas.drawText("BEST: $highScore KILLS", centerX, centerY + 180f, killCounterPaint)
             }
         }
 

@@ -71,7 +71,27 @@ class GameView(context: Context) : View(context) {
     private val bulletGlowPaint = Paint().apply {
         color = Color.CYAN
         isAntiAlias = true
-        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL) // Cyan bullet glow
+        maskFilter = BlurMaskFilter(20f, BlurMaskFilter.Blur.NORMAL) // Bigger glow for player bullets
+    }
+    private val enemyBulletPaint = Paint().apply {
+        color = Color.RED
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val enemyBulletGlowPaint = Paint().apply {
+        color = Color.RED
+        isAntiAlias = true
+        maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
+    }
+    private val powerUpPaint = Paint().apply {
+        color = Color.YELLOW
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val powerUpGlowPaint = Paint().apply {
+        color = Color.YELLOW
+        isAntiAlias = true
+        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL)
     }
     private val bloodPaint = Paint().apply {
         color = Color.RED
@@ -134,9 +154,9 @@ class GameView(context: Context) : View(context) {
         isFilterBitmap = false // Keep crisp pixels
     }
     private val spriteGlowPaint = Paint().apply {
-        color = Color.CYAN
+        color = Color.argb(25, 0, 255, 255) // 1/10th opacity (was 255 alpha)
         isAntiAlias = true
-        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL) // Reduced glow (was 30f)
+        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL)
     }
 
     // Player
@@ -151,6 +171,12 @@ class GameView(context: Context) : View(context) {
     private var bulletDamage = 8f
     private var fireRate = 1.5f
     private var fireCooldown = 0f
+
+    // Power-up states
+    private var hasSpreadShot = false
+    private var hasRapidFire = false
+    private var hasPiercing = false
+    private var hasHoming = false
 
     // Kill tracking
     private var killCount = 0
@@ -174,13 +200,36 @@ class GameView(context: Context) : View(context) {
         style = Paint.Style.FILL
     }
 
-    data class Enemy(var x: Float, var y: Float, var radius: Float, var speed: Float, var hp: Float)
-    data class Bullet(var x: Float, var y: Float, var vx: Float, var vy: Float)
+    enum class EnemyType { CIRCLE, TRIANGLE, SQUARE, PENTAGON, HEXAGON }
+
+    data class Enemy(
+        var x: Float,
+        var y: Float,
+        var radius: Float,
+        var speed: Float,
+        var hp: Float,
+        val type: EnemyType,
+        var shootCooldown: Float = 0f
+    ) {
+        fun getCornerCount(): Int = when(type) {
+            EnemyType.CIRCLE -> 0
+            EnemyType.TRIANGLE -> 3
+            EnemyType.SQUARE -> 4
+            EnemyType.PENTAGON -> 5
+            EnemyType.HEXAGON -> 6
+        }
+    }
+
+    data class Bullet(var x: Float, var y: Float, var vx: Float, var vy: Float, var isPlayerBullet: Boolean = true)
     data class BloodParticle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float)
+
+    enum class PowerUpType { SPREAD_SHOT, RAPID_FIRE, PIERCING, HOMING }
+    data class PowerUp(var x: Float, var y: Float, val type: PowerUpType, var vy: Float = 150f)
 
     private val enemies = mutableListOf<Enemy>()
     private val bullets = mutableListOf<Bullet>()
     private val blood = mutableListOf<BloodParticle>()
+    private val powerUps = mutableListOf<PowerUp>()
 
     // Waves + gacha
     private var wave = 1
@@ -323,7 +372,32 @@ class GameView(context: Context) : View(context) {
             val baseSpeed = 100f + wave * 15f
             // HP scaling increased: 10/wave (was 5)
             val hp = 30f + wave * 10f
-            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp))
+
+            // Progressive polygon introduction based on wave
+            val enemyType = when {
+                wave <= 2 -> EnemyType.CIRCLE
+                wave <= 4 -> if (rnd.nextFloat() < 0.7f) EnemyType.CIRCLE else EnemyType.TRIANGLE
+                wave <= 6 -> when (rnd.nextInt(3)) {
+                    0 -> EnemyType.CIRCLE
+                    1 -> EnemyType.TRIANGLE
+                    else -> EnemyType.SQUARE
+                }
+                wave <= 9 -> when (rnd.nextInt(4)) {
+                    0 -> EnemyType.CIRCLE
+                    1 -> EnemyType.TRIANGLE
+                    2 -> EnemyType.SQUARE
+                    else -> EnemyType.PENTAGON
+                }
+                else -> when (rnd.nextInt(5)) {
+                    0 -> EnemyType.CIRCLE
+                    1 -> EnemyType.TRIANGLE
+                    2 -> EnemyType.SQUARE
+                    3 -> EnemyType.PENTAGON
+                    else -> EnemyType.HEXAGON
+                }
+            }
+
+            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, enemyType))
         }
         if (playerHp <= 0) {
             playerHp = maxHp
@@ -365,7 +439,9 @@ class GameView(context: Context) : View(context) {
             updatePlayer(dt)
             updateEnemies(dt)
             updateBullets(dt)
+            updatePowerUps(dt)
             handleAutoFire(dt)
+            handleEnemyShooting(dt)
         }
 
         updateBlood(dt)
@@ -446,6 +522,12 @@ class GameView(context: Context) : View(context) {
                 e.x += nx * e.speed * dt
                 e.y += ny * e.speed * dt
             }
+
+            // Update shoot cooldown
+            if (e.shootCooldown > 0f) {
+                e.shootCooldown -= dt
+            }
+
             if (dist < e.radius + playerRadius && damageCooldown <= 0f) {
                 // Increased damage from 15 to 25 per second, but with cooldown
                 playerHp -= 25
@@ -511,23 +593,50 @@ class GameView(context: Context) : View(context) {
                 continue
             }
 
-            var hitEnemy: Enemy? = null
-            for (e in enemies) {
-                val dx = e.x - b.x
-                val dy = e.y - b.y
-                val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-                if (dist < e.radius) {
-                    hitEnemy = e
-                    break
+            if (b.isPlayerBullet) {
+                // Player bullet - check enemy hits
+                var hitEnemy: Enemy? = null
+                for (e in enemies) {
+                    val dx = e.x - b.x
+                    val dy = e.y - b.y
+                    val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                    if (dist < e.radius) {
+                        hitEnemy = e
+                        break
+                    }
                 }
-            }
-            if (hitEnemy != null) {
-                hitEnemy.hp -= bulletDamage
-                spawnBlood(hitEnemy.x, hitEnemy.y)
-                bulletIt.remove()
-                if (hitEnemy.hp <= 0f) {
-                    enemies.remove(hitEnemy)
-                    killCount++ // Increment kill counter
+                if (hitEnemy != null) {
+                    hitEnemy.hp -= bulletDamage
+                    spawnBlood(hitEnemy.x, hitEnemy.y)
+                    if (!hasPiercing) {
+                        bulletIt.remove() // Remove bullet unless piercing
+                    }
+                    if (hitEnemy.hp <= 0f) {
+                        // Enemy died - chance to drop power-up
+                        if (Random.nextFloat() < 0.15f) { // 15% drop chance
+                            val powerUpType = PowerUpType.values()[Random.nextInt(PowerUpType.values().size)]
+                            powerUps.add(PowerUp(hitEnemy.x, hitEnemy.y, powerUpType))
+                        }
+                        enemies.remove(hitEnemy)
+                        killCount++
+                    }
+                }
+            } else {
+                // Enemy bullet - check player hit
+                val dx = b.x - playerX
+                val dy = b.y - playerY
+                val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                if (dist < playerRadius && damageCooldown <= 0f) {
+                    playerHp -= 15 // Enemy bullets do less damage
+                    if (playerHp < 0) playerHp = 0
+                    triggerDamageFeedback()
+                    damageCooldown = 0.3f
+                    bulletIt.remove()
+
+                    // Trigger hit animation
+                    isPlayingHitAnimation = true
+                    hitAnimationTime = 0f
+                    currentFrame = 0
                 }
             }
         }
@@ -558,8 +667,69 @@ class GameView(context: Context) : View(context) {
                 val nx = dx / dist
                 val ny = dy / dist
                 val bulletSpeed = 700f
-                bullets.add(Bullet(playerX, playerY, nx * bulletSpeed, ny * bulletSpeed))
-                fireCooldown = 1f / fireRate
+
+                // Apply power-ups
+                if (hasSpreadShot) {
+                    // Fire 3 bullets in a spread
+                    val spreadAngle = 0.3f
+                    for (i in -1..1) {
+                        val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle
+                        val vx = cos(angle) * bulletSpeed
+                        val vy = sin(angle) * bulletSpeed
+                        bullets.add(Bullet(playerX, playerY, vx, vy, true))
+                    }
+                } else {
+                    bullets.add(Bullet(playerX, playerY, nx * bulletSpeed, ny * bulletSpeed, true))
+                }
+
+                val actualFireRate = if (hasRapidFire) fireRate * 1.5f else fireRate
+                fireCooldown = 1f / actualFireRate
+            }
+        }
+    }
+
+    private fun handleEnemyShooting(dt: Float) {
+        for (e in enemies) {
+            val cornerCount = e.getCornerCount()
+            if (cornerCount == 0) continue // Circles don't shoot
+
+            if (e.shootCooldown <= 0f) {
+                // Shoot bullets equal to corner count
+                val angleStep = (2f * PI.toFloat()) / cornerCount
+                for (i in 0 until cornerCount) {
+                    val angle = angleStep * i
+                    val bulletSpeed = 200f // Slow dodgeable bullets
+                    val vx = cos(angle) * bulletSpeed
+                    val vy = sin(angle) * bulletSpeed
+                    bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                }
+                e.shootCooldown = 3f // Shoot every 3 seconds
+            }
+        }
+    }
+
+    private fun updatePowerUps(dt: Float) {
+        val it = powerUps.iterator()
+        while (it.hasNext()) {
+            val p = it.next()
+            p.y += p.vy * dt // Fall down
+
+            // Check if player collected it
+            val dx = p.x - playerX
+            val dy = p.y - playerY
+            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+            if (dist < playerRadius + 20f) {
+                // Apply power-up
+                when (p.type) {
+                    PowerUpType.SPREAD_SHOT -> hasSpreadShot = true
+                    PowerUpType.RAPID_FIRE -> hasRapidFire = true
+                    PowerUpType.PIERCING -> hasPiercing = true
+                    PowerUpType.HOMING -> hasHoming = true
+                }
+                it.remove()
+            } else if (p.y > playerY + height / 2f + 100f) {
+                // Remove if off screen
+                it.remove()
             }
         }
     }
@@ -588,18 +758,8 @@ class GameView(context: Context) : View(context) {
             playerSpeed = prefs.getFloat("saved_speed", 250f)
             killCount = prefs.getInt("saved_kills", 0)
 
-            // Spawn enemies for current wave
-            enemies.clear()
-            val count = 8 + wave * 3
-            for (i in 0 until count) {
-                val angle = Random.nextFloat() * 2 * PI.toFloat()
-                val distance = 600f + Random.nextFloat() * 200f
-                val ex = playerX + cos(angle) * distance
-                val ey = playerY + sin(angle) * distance
-                val baseSpeed = 100f + wave * 15f
-                val hp = 30f + wave * 10f
-                enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp))
-            }
+            // Spawn enemies for current wave using spawnWave()
+            spawnWave()
         }
     }
 
@@ -632,6 +792,13 @@ class GameView(context: Context) : View(context) {
         enemies.clear()
         bullets.clear()
         blood.clear()
+        powerUps.clear()
+
+        // Reset power-up states
+        hasSpreadShot = false
+        hasRapidFire = false
+        hasPiercing = false
+        hasHoming = false
 
         // Reset death screen
         inDeathScreen = false
@@ -649,7 +816,7 @@ class GameView(context: Context) : View(context) {
             val ey = playerY + sin(angle) * distance
             val baseSpeed = 100f + wave * 15f
             val hp = 30f + wave * 10f
-            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp))
+            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, EnemyType.CIRCLE))
         }
     }
 
@@ -880,16 +1047,82 @@ class GameView(context: Context) : View(context) {
             canvas.drawCircle(p.x, p.y, 6f, bloodPaint)
         }
 
+        // Draw bullets with different visuals for player vs enemy
         for (b in bullets) {
-            // Neon glow effect
-            canvas.drawCircle(b.x, b.y, 12f, bulletGlowPaint)
-            canvas.drawCircle(b.x, b.y, 6f, bulletPaint)
+            if (b.isPlayerBullet) {
+                // Player bullets - cyan diamonds with glow
+                canvas.drawCircle(b.x, b.y, 15f, bulletGlowPaint)
+                val path = Path().apply {
+                    moveTo(b.x, b.y - 8f)
+                    lineTo(b.x + 6f, b.y)
+                    lineTo(b.x, b.y + 8f)
+                    lineTo(b.x - 6f, b.y)
+                    close()
+                }
+                canvas.drawPath(path, bulletPaint)
+            } else {
+                // Enemy bullets - red circles with glow
+                canvas.drawCircle(b.x, b.y, 10f, enemyBulletGlowPaint)
+                canvas.drawCircle(b.x, b.y, 5f, enemyBulletPaint)
+            }
         }
 
+        // Draw enemies as polygons based on type
         for (e in enemies) {
-            // Neon glow effect
-            canvas.drawCircle(e.x, e.y, e.radius + 10f, enemyGlowPaint)
-            canvas.drawCircle(e.x, e.y, e.radius, enemyPaint)
+            when (e.type) {
+                EnemyType.CIRCLE -> {
+                    canvas.drawCircle(e.x, e.y, e.radius + 10f, enemyGlowPaint)
+                    canvas.drawCircle(e.x, e.y, e.radius, enemyPaint)
+                }
+                else -> {
+                    // Draw polygon
+                    val corners = e.getCornerCount()
+                    val angleStep = (2f * PI.toFloat()) / corners
+                    val path = Path()
+                    for (i in 0 until corners) {
+                        val angle = angleStep * i - PI.toFloat() / 2f
+                        val px = e.x + cos(angle) * e.radius
+                        val py = e.y + sin(angle) * e.radius
+                        if (i == 0) path.moveTo(px, py)
+                        else path.lineTo(px, py)
+                    }
+                    path.close()
+
+                    // Glow
+                    val glowPath = Path()
+                    for (i in 0 until corners) {
+                        val angle = angleStep * i - PI.toFloat() / 2f
+                        val px = e.x + cos(angle) * (e.radius + 10f)
+                        val py = e.y + sin(angle) * (e.radius + 10f)
+                        if (i == 0) glowPath.moveTo(px, py)
+                        else glowPath.lineTo(px, py)
+                    }
+                    glowPath.close()
+                    canvas.drawPath(glowPath, enemyGlowPaint)
+                    canvas.drawPath(path, enemyPaint)
+                }
+            }
+        }
+
+        // Draw power-ups
+        for (p in powerUps) {
+            canvas.drawCircle(p.x, p.y, 20f, powerUpGlowPaint)
+            canvas.drawCircle(p.x, p.y, 12f, powerUpPaint)
+            // Draw icon/letter for power-up type
+            val iconPaint = Paint().apply {
+                color = Color.BLACK
+                textSize = 16f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            val icon = when (p.type) {
+                PowerUpType.SPREAD_SHOT -> "S"
+                PowerUpType.RAPID_FIRE -> "R"
+                PowerUpType.PIERCING -> "P"
+                PowerUpType.HOMING -> "H"
+            }
+            canvas.drawText(icon, p.x, p.y + 6f, iconPaint)
         }
 
         // Draw player sprite
@@ -1032,22 +1265,22 @@ class GameView(context: Context) : View(context) {
 
         // Death screen overlay
         if (inDeathScreen || isDying) {
-            // Fade to black (everything except player)
+            // Fade to black with red tint
             val deathOverlayPaint = Paint().apply {
-                color = Color.BLACK
+                color = Color.rgb(20, 0, 0) // Dark red instead of pure black
                 alpha = deathScreenFadeAlpha.toInt().coerceIn(0, 255)
             }
             canvas.drawRect(0f, 0f, w, h, deathOverlayPaint)
 
             if (inDeathScreen) {
-                // Kill count in big neon
+                // Kill count in big neon red
                 val killCountPaint = Paint().apply {
-                    color = Color.MAGENTA
+                    color = Color.RED
                     textSize = 100f
                     textAlign = Paint.Align.CENTER
                     typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                     isAntiAlias = true
-                    setShadowLayer(40f, 0f, 0f, Color.MAGENTA)
+                    setShadowLayer(40f, 0f, 0f, Color.RED)
                 }
                 canvas.drawText("$killCount KILLS", w / 2f, h * 0.3f, killCountPaint)
 
@@ -1104,8 +1337,13 @@ class GameView(context: Context) : View(context) {
                     isAntiAlias = true
                 }
 
-                // Draw buttons
-                canvas.drawRoundRect(rebornButtonRect, 20f, 20f, cardPaint)
+                // Draw buttons with black backgrounds
+                val buttonBgPaint = Paint().apply {
+                    color = Color.BLACK
+                    style = Paint.Style.FILL
+                }
+
+                canvas.drawRoundRect(rebornButtonRect, 20f, 20f, buttonBgPaint)
                 canvas.drawRoundRect(rebornButtonRect, 20f, 20f, rebornBorderPaint)
                 canvas.drawText(
                     "⚙ BE REBORN",
@@ -1114,7 +1352,7 @@ class GameView(context: Context) : View(context) {
                     rebornTextPaint
                 )
 
-                canvas.drawRoundRect(dieButtonRect, 20f, 20f, cardPaint)
+                canvas.drawRoundRect(dieButtonRect, 20f, 20f, buttonBgPaint)
                 canvas.drawRoundRect(dieButtonRect, 20f, 20f, dieBorderPaint)
                 canvas.drawText(
                     "☠ DIE",
