@@ -25,6 +25,10 @@ class GameView(context: Context) : View(context) {
     // Vibration
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
+    // Camera offset for centering player
+    private var cameraX = 0f
+    private var cameraY = 0f
+
     // Settings icon
     private var settingsIconRect = RectF()
 
@@ -315,10 +319,12 @@ class GameView(context: Context) : View(context) {
                 playerY += ny * playerSpeed * dt
             }
         }
+
+        // Update camera to center on player
         val w = width.toFloat()
         val h = height.toFloat()
-        playerX = playerX.coerceIn(playerRadius, w - playerRadius)
-        playerY = playerY.coerceIn(playerRadius, h - playerRadius)
+        cameraX = playerX - w / 2f
+        cameraY = playerY - h / 2f
     }
 
     private fun updateEnemies(dt: Float) {
@@ -560,8 +566,8 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val x = event.getX(index)
                 val y = event.getY(index)
-                // Floating joystick: appears anywhere on left 2/3 of screen
-                if (x < width * 0.67f && joyPointerId == -1) {
+                // Floating joystick: appears anywhere on screen
+                if (joyPointerId == -1) {
                     joyPointerId = event.getPointerId(index)
                     joyBaseX = x
                     joyBaseY = y
@@ -608,15 +614,17 @@ class GameView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
 
-        // Apply screen shake by translating canvas
+        // Apply camera offset and screen shake by translating canvas
         canvas.save()
-        canvas.translate(screenShakeX, screenShakeY)
+        canvas.translate(-cameraX + screenShakeX, -cameraY + screenShakeY)
 
-        canvas.drawRect(0f, 0f, w, h, bgPaint)
+        canvas.drawRect(cameraX, cameraY, cameraX + w, cameraY + h, bgPaint)
 
-        var x = 0f
-        while (x < w) {
-            canvas.drawLine(x, 0f, x, h, gridPaint)
+        // Draw grid with camera offset
+        var gridStartX = (cameraX / 80f).toInt() * 80f
+        var x = gridStartX
+        while (x < cameraX + w) {
+            canvas.drawLine(x, cameraY, x, cameraY + h, gridPaint)
             x += 80f
         }
 
@@ -717,10 +725,11 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Restore canvas from screen shake
+        // Restore canvas from camera and screen shake
         canvas.restore()
 
-        // Draw damage flash overlay AFTER restoring canvas (so it covers everything without shake)
+        // Draw UI elements in screen space (not world space)
+        // Damage flash overlay
         if (damageFlashAlpha > 0f) {
             damageOverlayPaint.alpha = damageFlashAlpha.toInt()
             canvas.drawRect(0f, 0f, w, h, damageOverlayPaint)
