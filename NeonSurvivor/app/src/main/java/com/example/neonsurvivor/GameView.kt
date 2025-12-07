@@ -618,7 +618,13 @@ class GameView(context: Context) : View(context) {
         canvas.save()
         canvas.translate(-cameraX + screenShakeX, -cameraY + screenShakeY)
 
-        canvas.drawRect(cameraX, cameraY, cameraX + w, cameraY + h, bgPaint)
+        // Draw large background centered on player (much bigger than screen)
+        val bgSize = 10000f // Large background for infinite world feel
+        canvas.drawRect(
+            playerX - bgSize, playerY - bgSize,
+            playerX + bgSize, playerY + bgSize,
+            bgPaint
+        )
 
         // Draw grid with camera offset
         var gridStartX = (cameraX / 80f).toInt() * 80f
@@ -626,6 +632,14 @@ class GameView(context: Context) : View(context) {
         while (x < cameraX + w) {
             canvas.drawLine(x, cameraY, x, cameraY + h, gridPaint)
             x += 80f
+        }
+
+        // Draw vertical grid lines too
+        var gridStartY = (cameraY / 80f).toInt() * 80f
+        var y = gridStartY
+        while (y < cameraY + h) {
+            canvas.drawLine(cameraX, y, cameraX + w, y, gridPaint)
+            y += 80f
         }
 
         for (p in blood) {
@@ -644,6 +658,12 @@ class GameView(context: Context) : View(context) {
 
         canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
 
+        // Restore canvas from camera and screen shake
+        canvas.restore()
+
+        // Draw UI elements in screen space (not world space)
+
+        // HP bar
         val barWidth = w * 0.6f
         val barHeight = 24f
         val barX = (w - barWidth) / 2f
@@ -692,14 +712,15 @@ class GameView(context: Context) : View(context) {
             pauseIconPaint
         )
 
+        // Joystick in screen space
         if (joyActive) {
             canvas.drawCircle(joyBaseX, joyBaseY, joyBaseRadius, joyBasePaint)
             val knobX = joyBaseX + joyDx
             val knobY = joyBaseY + joyDy
             canvas.drawCircle(knobX, knobY, joyKnobRadius, joyKnobPaint)
         }
-        // No inactive joystick indicator for floating joystick
 
+        // Gacha menu overlay
         if (inGacha) {
             canvas.drawRect(0f, 0f, w, h, overlayPaint)
             canvas.drawText("Choose an upgrade:", w * 0.1f, h * 0.25f, textPaint)
@@ -725,10 +746,6 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Restore canvas from camera and screen shake
-        canvas.restore()
-
-        // Draw UI elements in screen space (not world space)
         // Damage flash overlay
         if (damageFlashAlpha > 0f) {
             damageOverlayPaint.alpha = damageFlashAlpha.toInt()
