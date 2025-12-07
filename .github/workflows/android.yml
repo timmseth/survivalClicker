@@ -47,14 +47,11 @@ jobs:
           body: |
             Build #${{ github.run_number }} completed successfully!
 
-            📦 DOWNLOAD APK (click to download ZIP, then extract):
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts
-
-            🔗 View build details:
+            📦 DOWNLOAD APK:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Scroll down to "Artifacts" section → Click "neon-survivor-apk" to download
 
             📝 Commit: ${{ github.sha }}
             💬 Message: ${{ github.event.head_commit.message }}
             🌿 Branch: ${{ github.ref }}
-
-            The artifact "neon-survivor-apk" will be at the top of the artifacts page!
