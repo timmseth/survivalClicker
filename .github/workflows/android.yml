@@ -27,10 +27,17 @@ jobs:
           build-root-directory: NeonSurvivor
 
       - name: Upload APK artifact
+        id: upload-artifact
         uses: actions/upload-artifact@v4
         with:
           name: neon-survivor-apk
           path: NeonSurvivor/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Get artifact URL
+        id: artifact-url
+        run: |
+          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload-artifact.outputs.artifact-id }}"
+          echo "url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
 
       - name: Send Build Notification Email
         continue-on-error: true
@@ -47,10 +54,8 @@ jobs:
           body: |
             Build #${{ github.run_number }} completed successfully!
 
-            📦 DOWNLOAD APK:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Scroll down to "Artifacts" section → Click "neon-survivor-apk" to download
+            📦 DOWNLOAD APK (one-click):
+            ${{ steps.artifact-url.outputs.url }}
 
             📝 Commit: ${{ github.sha }}
             💬 Message: ${{ github.event.head_commit.message }}
