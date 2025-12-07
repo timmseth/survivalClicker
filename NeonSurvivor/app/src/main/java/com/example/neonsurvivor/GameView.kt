@@ -92,13 +92,13 @@ class GameView(context: Context) : View(context) {
     private var playerX = 0f
     private var playerY = 0f
     private var playerRadius = 30f
-    private var playerSpeed = 300f
+    private var playerSpeed = 250f  // Reduced from 300
     private var playerHp = 100
     private var maxHp = 100
 
-    // Stats
-    private var bulletDamage = 10f
-    private var fireRate = 2f
+    // Stats (rebalanced for difficulty)
+    private var bulletDamage = 8f
+    private var fireRate = 1.5f
     private var fireCooldown = 0f
 
     // Joystick
@@ -196,7 +196,8 @@ class GameView(context: Context) : View(context) {
 
     private fun spawnWave() {
         enemies.clear()
-        val count = 5 + wave * 2
+        // Increased enemy count: was 5 + wave*2, now 8 + wave*3
+        val count = 8 + wave * 3
         val rnd = Random(System.currentTimeMillis())
         for (i in 0 until count) {
             val edge = rnd.nextInt(4)
@@ -208,8 +209,10 @@ class GameView(context: Context) : View(context) {
                 2 -> { ex = -60f; ey = rnd.nextFloat() * height }
                 else -> { ex = width + 60f; ey = rnd.nextFloat() * height }
             }
-            val baseSpeed = 60f + wave * 10f
-            val hp = 30f + wave * 5f
+            // Faster and tankier: base speed 100 (was 60), scaling 15/wave (was 10)
+            val baseSpeed = 100f + wave * 15f
+            // HP scaling increased: 10/wave (was 5)
+            val hp = 30f + wave * 10f
             enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp))
         }
         if (playerHp <= 0) {
@@ -222,9 +225,9 @@ class GameView(context: Context) : View(context) {
         if (playerHp <= 0) {
             wave = 1
             playerHp = maxHp
-            bulletDamage = 10f
-            fireRate = 2f
-            playerSpeed = 300f
+            bulletDamage = 8f
+            fireRate = 1.5f
+            playerSpeed = 250f
             spawnWave()
             return
         }
@@ -426,15 +429,15 @@ class GameView(context: Context) : View(context) {
             when (t) {
                 UpgradeType.DAMAGE ->
                     upgradeOptions.add(
-                        UpgradeOption(t, "Damage +30%", "Bullets hit harder.")
+                        UpgradeOption(t, "Damage +20%", "Bullets hit harder.")
                     )
                 UpgradeType.FIRE_RATE ->
                     upgradeOptions.add(
-                        UpgradeOption(t, "Fire Rate +30%", "Shoot more often.")
+                        UpgradeOption(t, "Fire Rate +20%", "Shoot more often.")
                     )
                 UpgradeType.SPEED ->
                     upgradeOptions.add(
-                        UpgradeOption(t, "Speed +20%", "Move faster.")
+                        UpgradeOption(t, "Speed +15%", "Move faster.")
                     )
                 UpgradeType.HP ->
                     upgradeOptions.add(
@@ -446,9 +449,9 @@ class GameView(context: Context) : View(context) {
 
     private fun applyUpgrade(option: UpgradeOption) {
         when (option.type) {
-            UpgradeType.DAMAGE -> bulletDamage *= 1.3f
-            UpgradeType.FIRE_RATE -> fireRate *= 1.3f
-            UpgradeType.SPEED -> playerSpeed *= 1.2f
+            UpgradeType.DAMAGE -> bulletDamage *= 1.2f  // Nerfed from 1.3
+            UpgradeType.FIRE_RATE -> fireRate *= 1.2f  // Nerfed from 1.3
+            UpgradeType.SPEED -> playerSpeed *= 1.15f  // Nerfed from 1.2
             UpgradeType.HP -> {
                 maxHp += 20
                 playerHp = maxHp
