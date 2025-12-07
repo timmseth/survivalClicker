@@ -661,25 +661,25 @@ class GameView(context: Context) : View(context) {
         canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 30f, pauseBgPaint)
 
         // Draw pause bars (two vertical rectangles)
-        val centerX = settingsIconRect.centerX()
-        val centerY = settingsIconRect.centerY()
-        val barWidth = 8f
-        val barHeight = 26f
-        val barGap = 10f
+        val pauseCenterX = settingsIconRect.centerX()
+        val pauseCenterY = settingsIconRect.centerY()
+        val pauseBarWidth = 8f
+        val pauseBarHeight = 26f
+        val pauseBarGap = 10f
 
         canvas.drawRoundRect(
-            centerX - barGap - barWidth,
-            centerY - barHeight / 2,
-            centerX - barGap,
-            centerY + barHeight / 2,
+            pauseCenterX - pauseBarGap - pauseBarWidth,
+            pauseCenterY - pauseBarHeight / 2,
+            pauseCenterX - pauseBarGap,
+            pauseCenterY + pauseBarHeight / 2,
             4f, 4f,
             pauseIconPaint
         )
         canvas.drawRoundRect(
-            centerX + barGap,
-            centerY - barHeight / 2,
-            centerX + barGap + barWidth,
-            centerY + barHeight / 2,
+            pauseCenterX + pauseBarGap,
+            pauseCenterY - pauseBarHeight / 2,
+            pauseCenterX + pauseBarGap + pauseBarWidth,
+            pauseCenterY + pauseBarHeight / 2,
             4f, 4f,
             pauseIconPaint
         )
