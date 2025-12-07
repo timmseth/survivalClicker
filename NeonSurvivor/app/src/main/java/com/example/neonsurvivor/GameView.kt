@@ -80,6 +80,10 @@ class GameView(context: Context) : View(context) {
         color = Color.argb(190, 0, 0, 0)
         style = Paint.Style.FILL
     }
+    private val pauseOverlayPaint = Paint().apply {
+        color = Color.argb(100, 0, 0, 0)
+        style = Paint.Style.FILL
+    }
     private val cardPaint = Paint().apply {
         color = Color.argb(220, 30, 30, 30)
         style = Paint.Style.FILL
@@ -457,6 +461,13 @@ class GameView(context: Context) : View(context) {
 
     private fun openGacha() {
         inGacha = true
+
+        // Reset joystick state to prevent auto-run after unpause
+        joyPointerId = -1
+        joyActive = false
+        joyDx = 0f
+        joyDy = 0f
+
         upgradeOptions.clear()
         val allTypes = UpgradeType.values().toMutableList()
         allTypes.shuffle()
@@ -634,23 +645,44 @@ class GameView(context: Context) : View(context) {
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
         canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
 
-        // Settings icon (gear icon)
-        val iconPaint = Paint().apply {
-            color = Color.argb(200, 100, 200, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = 4f
+        // Pause icon with semi-transparent background
+        val pauseBgPaint = Paint().apply {
+            color = Color.argb(80, 0, 0, 0)
+            style = Paint.Style.FILL
             isAntiAlias = true
         }
-        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 20f, iconPaint)
-        for (i in 0..7) {
-            val angle = i * 45f
-            val rad = Math.toRadians(angle.toDouble())
-            val x1 = settingsIconRect.centerX() + cos(rad).toFloat() * 16f
-            val y1 = settingsIconRect.centerY() + sin(rad).toFloat() * 16f
-            val x2 = settingsIconRect.centerX() + cos(rad).toFloat() * 24f
-            val y2 = settingsIconRect.centerY() + sin(rad).toFloat() * 24f
-            canvas.drawLine(x1, y1, x2, y2, iconPaint)
+        val pauseIconPaint = Paint().apply {
+            color = Color.CYAN
+            style = Paint.Style.FILL
+            isAntiAlias = true
         }
+
+        // Draw semi-transparent background circle
+        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 30f, pauseBgPaint)
+
+        // Draw pause bars (two vertical rectangles)
+        val centerX = settingsIconRect.centerX()
+        val centerY = settingsIconRect.centerY()
+        val barWidth = 8f
+        val barHeight = 26f
+        val barGap = 10f
+
+        canvas.drawRoundRect(
+            centerX - barGap - barWidth,
+            centerY - barHeight / 2,
+            centerX - barGap,
+            centerY + barHeight / 2,
+            4f, 4f,
+            pauseIconPaint
+        )
+        canvas.drawRoundRect(
+            centerX + barGap,
+            centerY - barHeight / 2,
+            centerX + barGap + barWidth,
+            centerY + barHeight / 2,
+            4f, 4f,
+            pauseIconPaint
+        )
 
         if (joyActive) {
             canvas.drawCircle(joyBaseX, joyBaseY, joyBaseRadius, joyBasePaint)

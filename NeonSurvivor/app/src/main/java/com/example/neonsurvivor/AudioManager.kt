@@ -66,12 +66,13 @@ object AudioManager {
 
                 musicTrack?.play()
 
-                // Darksynth bassline: C2, D#2, F2, G2
-                val notes = doubleArrayOf(65.41, 77.78, 87.31, 98.00)
-                val beatLength = sampleRate / 2 // 0.5 seconds per note
+                // Darksynth progression: C2, D#2, F2, G2, G#2, F2, D#2, C2 (longer loop with variety)
+                val notes = doubleArrayOf(65.41, 77.78, 87.31, 98.00, 103.83, 87.31, 77.78, 65.41)
+                val beatLength = sampleRate / 3 // 0.33 seconds per note (faster pacing with variety)
 
                 var noteIndex = 0
                 var beatCount = 0
+                var lowPassState = 0.0 // For filtering
 
                 while (isPlaying) {
                     val note = notes[noteIndex]
@@ -79,19 +80,28 @@ object AudioManager {
 
                     for (i in buffer.indices) {
                         val t = i.toDouble() / sampleRate
-                        // Dark synth: saw wave + sub bass
+                        // Dark synth: saw wave + sub bass with variation
                         val saw = (2.0 * ((t * note) % 1.0) - 1.0)
                         val sub = sin(2.0 * PI * note * t * 0.5) // Sub bass
-                        val envelope = exp(-t * 2.0) * 0.3 + 0.2 // Decay envelope
 
-                        val mixed = (saw * 0.3 + sub * 0.7) * envelope
-                        buffer[i] = (mixed * 8000).toInt().coerceIn(-32768, 32767).toShort()
+                        // Vary envelope for different notes
+                        val envelopeDecay = if (noteIndex % 2 == 0) 2.5 else 3.0
+                        val envelope = exp(-t * envelopeDecay) * 0.25 + 0.15
+
+                        // Mix with slight variation per note
+                        val sawMix = if (noteIndex < 4) 0.25 else 0.3
+                        val mixed = (saw * sawMix + sub * (1.0 - sawMix)) * envelope
+
+                        // Simple low-pass filter to soften harsh edges
+                        lowPassState = lowPassState * 0.7 + mixed * 0.3
+
+                        buffer[i] = (lowPassState * 6000).toInt().coerceIn(-32768, 32767).toShort()
                     }
 
                     musicTrack?.write(buffer, 0, buffer.size)
 
                     beatCount++
-                    if (beatCount >= 4) {
+                    if (beatCount >= 3) {
                         beatCount = 0
                         noteIndex = (noteIndex + 1) % notes.size
                     }
@@ -159,15 +169,21 @@ object AudioManager {
 
                 rainTrack?.play()
 
-                // White noise filtered for rain sound
+                // Softer filtered noise for gentle rain sound
+                var brownState = 0.0 // For brown noise filtering
+
                 while (rainPlaying) {
                     val buffer = ShortArray(sampleRate / 10) // 0.1 second chunks
 
                     for (i in buffer.indices) {
-                        // Brown noise (filtered white noise) sounds like rain
+                        // Brown noise: heavily filtered white noise for soft rain
                         val white = (Math.random() * 2.0 - 1.0)
-                        val filtered = white * 0.15 // Quiet background rain
-                        buffer[i] = (filtered * 3000).toInt().coerceIn(-32768, 32767).toShort()
+
+                        // Multi-stage filtering to remove harsh frequencies
+                        brownState = (brownState + white * 0.02) * 0.98 // Brown noise filter
+                        val softFiltered = brownState * 0.08 // Much quieter, softer
+
+                        buffer[i] = (softFiltered * 2000).toInt().coerceIn(-32768, 32767).toShort()
                     }
 
                     rainTrack?.write(buffer, 0, buffer.size)

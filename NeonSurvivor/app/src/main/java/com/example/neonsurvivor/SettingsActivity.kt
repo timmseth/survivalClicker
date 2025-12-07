@@ -189,6 +189,13 @@ class SettingsView(context: Context) : View(context) {
                 soundToggleRect.contains(x, y) -> {
                     soundEnabled = !soundEnabled
                     prefs.edit().putBoolean("sound_enabled", soundEnabled).apply()
+
+                    // Toggle rain sound
+                    if (soundEnabled) {
+                        AudioManager.startRain(context)
+                    } else {
+                        AudioManager.stopRain()
+                    }
                     invalidate()
                     return true
                 }
