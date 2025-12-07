@@ -50,10 +50,8 @@ jobs:
           body: |
             Build #${{ github.run_number }} completed successfully!
 
-            📦 DOWNLOAD APK:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Click the "neon-survivor-apk" artifact to download!
+            📦 DOWNLOAD APK (one-click):
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload-artifact.outputs.artifact-id }}
 
             📝 Commit: ${{ github.sha }}
             💬 Message: ${{ github.event.head_commit.message }}
