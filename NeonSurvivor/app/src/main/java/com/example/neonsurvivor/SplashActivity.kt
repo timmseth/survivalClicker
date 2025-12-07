@@ -90,6 +90,19 @@ class SplashScreenView(context: Context) : View(context) {
             isAntiAlias = true
         }
 
+        // Kill counter paint (flickering neon magenta)
+        private val killCounterPaint = Paint().apply {
+            color = Color.MAGENTA
+            textSize = 80f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(30f, 0f, 0f, Color.MAGENTA)
+        }
+
+        // Load high score from prefs
+        private val prefs = context.getSharedPreferences("game_stats", Context.MODE_PRIVATE)
+
         // Rain particles
         data class RainDrop(
             var x: Float,
@@ -285,6 +298,26 @@ class SplashScreenView(context: Context) : View(context) {
             canvas.drawText("SURVIVOR", centerX, centerY + 60f, neonGlowPaint)
             canvas.drawText("SURVIVOR", centerX, centerY + 60f, neonOutlinePaint)
             canvas.drawText("SURVIVOR", centerX, centerY + 60f, neonCorePaint)
+
+            // Draw kill counter with flickering effect
+            val highScore = prefs.getInt("high_score", 0)
+            if (highScore > 0) {
+                // Flickering neon effect (broken motel sign style)
+                val flicker = 0.85f + sin(elapsedTime * 8.2f) * 0.08f +
+                              sin(elapsedTime * 17.3f) * 0.04f +
+                              (if (Random.nextFloat() < 0.1f) -0.3f else 0.03f)
+
+                // Hue shift effect (cycle through pink/magenta/purple)
+                val hueShift = (elapsedTime * 40f) % 360f
+                val hue = (300f + hueShift % 60f) // Cycle between 300-360 (pink/magenta range)
+                val color = Color.HSVToColor(floatArrayOf(hue, 0.8f, 1.0f))
+
+                killCounterPaint.color = color
+                killCounterPaint.alpha = (255 * flicker).toInt().coerceIn(150, 255)
+                killCounterPaint.setShadowLayer(40f, 0f, 0f, color)
+
+                canvas.drawText("$highScore KILLS", centerX, centerY + 180f, killCounterPaint)
+            }
         }
 
         private fun drawButtons(canvas: Canvas) {

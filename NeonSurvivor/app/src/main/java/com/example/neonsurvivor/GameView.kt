@@ -121,7 +121,8 @@ class GameView(context: Context) : View(context) {
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
-    private val spriteSize = 192f // 3x larger sprite (was 64f)
+    private val spriteWidth = 576f // 3x wider (3 * 192)
+    private val spriteHeight = 192f // 3x larger height (was 64f)
     private val spritePaint = Paint().apply {
         isAntiAlias = false // Pixel art should not be antialiased
         isFilterBitmap = false // Keep crisp pixels
@@ -129,7 +130,7 @@ class GameView(context: Context) : View(context) {
     private val spriteGlowPaint = Paint().apply {
         color = Color.CYAN
         isAntiAlias = true
-        maskFilter = BlurMaskFilter(30f, BlurMaskFilter.Blur.NORMAL) // Neon glow
+        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL) // Reduced glow (was 30f)
     }
 
     // Player
@@ -144,6 +145,10 @@ class GameView(context: Context) : View(context) {
     private var bulletDamage = 8f
     private var fireRate = 1.5f
     private var fireCooldown = 0f
+
+    // Kill tracking
+    private var killCount = 0
+    private val prefs = context.getSharedPreferences("game_stats", Context.MODE_PRIVATE)
 
     // Joystick
     private var joyBaseX = 0f
@@ -303,6 +308,12 @@ class GameView(context: Context) : View(context) {
 
     private fun update(dt: Float) {
         if (playerHp <= 0) {
+            // Save high score if this run beat it
+            val currentHighScore = prefs.getInt("high_score", 0)
+            if (killCount > currentHighScore) {
+                prefs.edit().putInt("high_score", killCount).apply()
+            }
+
             // Return to splash screen on death
             val intent = Intent(context, SplashActivity::class.java)
             (context as Activity).startActivity(intent)
@@ -460,6 +471,7 @@ class GameView(context: Context) : View(context) {
                 bulletIt.remove()
                 if (hitEnemy.hp <= 0f) {
                     enemies.remove(hitEnemy)
+                    killCount++ // Increment kill counter
                 }
             }
         }
@@ -731,16 +743,16 @@ class GameView(context: Context) : View(context) {
             (currentFrame + 1) * frameHeight
         )
 
-        // Destination rect (where to draw on screen)
+        // Destination rect (where to draw on screen) - now 3x wider
         val dstRect = RectF(
-            playerX - spriteSize / 2f,
-            playerY - spriteSize / 2f,
-            playerX + spriteSize / 2f,
-            playerY + spriteSize / 2f
+            playerX - spriteWidth / 2f,
+            playerY - spriteHeight / 2f,
+            playerX + spriteWidth / 2f,
+            playerY + spriteHeight / 2f
         )
 
-        // Draw neon glow behind sprite
-        canvas.drawCircle(playerX, playerY, spriteSize / 2f, spriteGlowPaint)
+        // Draw neon glow behind sprite (smaller radius)
+        canvas.drawCircle(playerX, playerY, spriteHeight / 2.5f, spriteGlowPaint)
 
         canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
 
