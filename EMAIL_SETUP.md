@@ -1,6 +1,6 @@
 # Email Notification Setup for Neon Survivor CI
 
-The CI workflow now emails the APK to you after every successful build!
+The CI workflow now emails you a download link after every successful build!
 
 ## Quick Setup (5 minutes)
 
@@ -40,31 +40,32 @@ timmons.seth@gmail.com, friend@example.com, tester@example.com
 ### Step 3: Done!
 
 Next time you push, you'll get an email with:
-- ✅ APK attached
+- 📦 Direct link to download APK
 - 📋 Commit info
 - 🔗 Link to build logs
-- 🎮 Ready to install!
+- 🎮 One-click artifact download!
 
 ---
 
 ## Email Format Preview
 
-**Subject:** 🎮 Neon Survivor APK Build #42 Ready!
+**Subject:** 🎮 Neon Survivor Build #42 Ready!
 
 **Body:**
 ```
 Build #42 completed successfully!
 
-Commit: abc1234...
-Message: Cycle 3: Epic cyberpunk splash screen with neon rain
-Branch: refs/heads/main
+📦 Download APK:
+https://github.com/timmseth/survivalClicker/actions/runs/...
 
-APK is attached - install and test!
+📝 Commit: abc1234...
+💬 Message: Update README with comprehensive documentation
+🌿 Branch: refs/heads/main
 
-View build: https://github.com/timmseth/survivalClicker/actions/runs/...
+Click "neon-survivor-apk" artifact to download the APK!
 ```
 
-**Attachment:** `app-debug.apk` (auto-installs on Android)
+No attachment needed - just click the link to download from GitHub Actions!
 
 ---
 
