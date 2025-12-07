@@ -312,11 +312,12 @@ class GameView(context: Context) : View(context) {
             val edge = rnd.nextInt(4)
             val ex: Float
             val ey: Float
+            // Spawn in world coordinates relative to player position (not screen coordinates)
             when (edge) {
-                0 -> { ex = rnd.nextFloat() * width; ey = -60f }
-                1 -> { ex = rnd.nextFloat() * width; ey = height + 60f }
-                2 -> { ex = -60f; ey = rnd.nextFloat() * height }
-                else -> { ex = width + 60f; ey = rnd.nextFloat() * height }
+                0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
+                1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
+                2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
             }
             // Faster and tankier: base speed 100 (was 60), scaling 15/wave (was 10)
             val baseSpeed = 100f + wave * 15f
@@ -900,11 +901,11 @@ class GameView(context: Context) : View(context) {
         when {
             isDying -> {
                 spriteSheet = playerDeathSprite
-                totalFrames = 4 // Death animation frames
+                totalFrames = 5 // Death animation frames
             }
             isPlayingHitAnimation -> {
                 spriteSheet = playerHitSprite
-                totalFrames = 4 // Hit animation frames
+                totalFrames = 2 // Hit animation frames (player_attack.png used as hit)
             }
             isMoving -> {
                 spriteSheet = playerRunSprite
