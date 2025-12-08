@@ -1586,42 +1586,38 @@ class GameView(context: Context) : View(context) {
             // Draw glow behind sprite
             canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
 
-            // Determine which row based on enemy type (3 enemy types, 1 per row)
-            val row = when (e.type) {
-                EnemyType.CIRCLE -> 0
-                EnemyType.TRIANGLE -> 1
-                else -> 2  // SQUARE, PENTAGON, HEXAGON use row 2
+            // Sprite sheet: 6 rows × 18 columns
+            // Each frame is 64px wide (4×16px) × 32px tall (2 rows)
+            // Character mapping: 2 rows per character
+            val rowPair = when (e.type) {
+                EnemyType.CIRCLE -> 0  // Rows 0-1
+                EnemyType.TRIANGLE -> 2  // Rows 2-3
+                else -> 4  // Rows 4-5 (SQUARE, PENTAGON, HEXAGON)
             }
 
-            // Determine direction and animation column
-            // Chunks: 1,4,7=down  2,5,8=left  3,6,9=up
-            // Calculate direction to player for orientation
+            // Determine direction for orientation
             val dx = playerX - e.x
             val dy = playerY - e.y
             val absX = abs(dx)
             val absY = abs(dy)
 
-            val (baseCol, flipHorizontal) = when {
-                absY > absX && dy > 0 -> Pair(0, false)  // Down (columns 1,4,7 = indices 0,3,6)
-                absY > absX && dy < 0 -> Pair(2, false)  // Up (columns 3,6,9 = indices 2,5,8)
-                absX >= absY && dx < 0 -> Pair(1, false) // Left (columns 2,5,8 = indices 1,4,7)
-                else -> Pair(1, true)  // Right (flip left sprite)
+            // For now, use first frame column set (columns 1&2 = indices 0-1)
+            // Animation frames: columns 0-1, 6-7, 12-13 (3 frames)
+            val frameCol = when (e.animFrame % 3) {
+                0 -> 0   // Columns 1&2 (index 0-1)
+                1 -> 6   // Columns 7&8 (index 6-7)
+                else -> 12  // Columns 13&14 (index 12-13)
             }
 
-            // 3 frames per direction: baseCol, baseCol+3, baseCol+6
-            val frameIndex = when (e.animFrame % 3) {
-                0 -> baseCol
-                1 -> baseCol + 3
-                else -> baseCol + 6
-            }
+            // Each frame is 64px wide (4×16px), 32px tall (2×16px for character)
+            val chunkWidth = 64
+            val chunkHeight = 32
 
-            // 16px chunks, 9 columns × 3 rows
-            val chunkSize = 16
             val srcRect = Rect(
-                frameIndex * chunkSize,
-                row * chunkSize,
-                (frameIndex + 1) * chunkSize,
-                (row + 1) * chunkSize
+                frameCol * 16,  // Start at column index * 16px
+                rowPair * 16,   // Start at row pair * 16px
+                frameCol * 16 + chunkWidth,  // 64px wide
+                rowPair * 16 + chunkHeight   // 32px tall (2 rows)
             )
 
             // Draw sprite (scaled to enemy radius * 2)

@@ -34,124 +34,32 @@ object AudioManager {
         // Load saved volume
         musicVolume = prefs.getFloat("music_volume", 0.12f)
 
-        // Check which music track to use
-        val usePortalMusic = prefs.getBoolean("use_portal_music", false)
-
         isPlaying = true
 
-        if (usePortalMusic) {
-            // Use Portal to Underworld OGG file
-            try {
-                mediaPlayer = MediaPlayer.create(context, R.raw.portal_underworld)
-                mediaPlayer?.isLooping = true
-                mediaPlayer?.setVolume(musicVolume, musicVolume)
-                mediaPlayer?.start()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            return
+        // Play OGG music file (future: loop through multiple tracks)
+        try {
+            mediaPlayer = MediaPlayer.create(context, R.raw.portal_underworld)
+            mediaPlayer?.isLooping = true
+            mediaPlayer?.setVolume(musicVolume, musicVolume)
+            mediaPlayer?.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+    }
 
-        musicThread = Thread {
-            try {
-                val bufferSize = AudioTrack.getMinBufferSize(
-                    sampleRate,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT
-                )
-
-                musicTrack = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    AudioTrack.Builder()
-                        .setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_GAME)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                                .build()
-                        )
-                        .setAudioFormat(
-                            AudioFormat.Builder()
-                                .setSampleRate(sampleRate)
-                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                                .build()
-                        )
-                        .setBufferSizeInBytes(bufferSize)
-                        .build()
-                } else {
-                    @Suppress("DEPRECATION")
-                    AudioTrack(
-                        android.media.AudioManager.STREAM_MUSIC,
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                        bufferSize,
-                        AudioTrack.MODE_STREAM
-                    )
-                }
-
-                musicTrack?.play()
-
-                // Darksynth progression: C2, D#2, F2, G2, G#2, F2, D#2, C2 (longer loop with variety)
-                val notes = doubleArrayOf(65.41, 77.78, 87.31, 98.00, 103.83, 87.31, 77.78, 65.41)
-                val beatLength = sampleRate / 3 // 0.33 seconds per note (faster pacing with variety)
-
-                var noteIndex = 0
-                var beatCount = 0
-                var lowPassState = 0.0 // For filtering
-
-                while (isPlaying) {
-                    val note = notes[noteIndex]
-                    val buffer = ShortArray(beatLength)
-
-                    for (i in buffer.indices) {
-                        val t = i.toDouble() / sampleRate
-                        // Dark synth: saw wave + sub bass with variation
-                        val saw = (2.0 * ((t * note) % 1.0) - 1.0)
-                        val sub = sin(2.0 * PI * note * t * 0.5) // Sub bass
-
-                        // Vary envelope for different notes
-                        val envelopeDecay = if (noteIndex % 2 == 0) 2.5 else 3.0
-                        val envelope = exp(-t * envelopeDecay) * 0.25 + 0.15
-
-                        // Mix with slight variation per note
-                        val sawMix = if (noteIndex < 4) 0.25 else 0.3
-                        val mixed = (saw * sawMix + sub * (1.0 - sawMix)) * envelope
-
-                        // Simple low-pass filter to soften harsh edges
-                        lowPassState = lowPassState * 0.7 + mixed * 0.3
-
-                        buffer[i] = (lowPassState * 6000 * musicVolume).toInt().coerceIn(-32768, 32767).toShort()
-                    }
-
-                    musicTrack?.write(buffer, 0, buffer.size)
-
-                    beatCount++
-                    if (beatCount >= 3) {
-                        beatCount = 0
-                        noteIndex = (noteIndex + 1) % notes.size
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        musicThread?.start()
+    // Update volume for currently playing music
+    fun updateMusicVolume(volume: Float) {
+        musicVolume = volume
+        mediaPlayer?.setVolume(volume, volume)
     }
 
     fun stopMusic() {
         isPlaying = false
 
-        // Stop MediaPlayer if it was being used
+        // Stop MediaPlayer
         mediaPlayer?.stop()
         mediaPlayer?.release()
         mediaPlayer = null
-
-        // Stop procedural music if it was being used
-        musicThread?.join(500)
-        musicTrack?.stop()
-        musicTrack?.release()
-        musicTrack = null
-        musicThread = null
     }
 
     fun startRain(context: Context) {
