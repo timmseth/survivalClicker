@@ -310,6 +310,12 @@ class GameView(context: Context) : View(context) {
     private var rebornButtonRect = RectF()
     private var dieButtonRect = RectF()
 
+    // Clicker button rects
+    private var damageButtonRect = RectF()
+    private var fireButtonRect = RectF()
+    private var speedButtonRect = RectF()
+    private var hpButtonRect = RectF()
+
     enum class UpgradeType { DAMAGE, FIRE_RATE, SPEED, HP }
     data class UpgradeOption(val type: UpgradeType, val label: String, val desc: String)
     private val upgradeOptions = mutableListOf<UpgradeOption>()
@@ -992,6 +998,12 @@ class GameView(context: Context) : View(context) {
             putFloat("saved_fire_rate", fireRate)
             putFloat("saved_speed", playerSpeed)
             putInt("saved_kills", killCount)
+            // Save clicker data
+            putInt("orb_currency", orbCurrency)
+            putInt("clicker_damage_level", clickerDamageLevel)
+            putInt("clicker_fire_rate_level", clickerFireRateLevel)
+            putInt("clicker_speed_level", clickerSpeedLevel)
+            putInt("clicker_hp_level", clickerHpLevel)
             apply()
         }
     }
@@ -1006,6 +1018,13 @@ class GameView(context: Context) : View(context) {
             fireRate = prefs.getFloat("saved_fire_rate", 1.5f)
             playerSpeed = prefs.getFloat("saved_speed", 250f)
             killCount = prefs.getInt("saved_kills", 0)
+
+            // Load clicker data
+            orbCurrency = prefs.getInt("orb_currency", 0)
+            clickerDamageLevel = prefs.getInt("clicker_damage_level", 0)
+            clickerFireRateLevel = prefs.getInt("clicker_fire_rate_level", 0)
+            clickerSpeedLevel = prefs.getInt("clicker_speed_level", 0)
+            clickerHpLevel = prefs.getInt("clicker_hp_level", 0)
 
             // Spawn enemies for current wave using spawnWave()
             spawnWave()
@@ -1184,6 +1203,41 @@ class GameView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val action = event.actionMasked
         val index = event.actionIndex
+
+        // Check clicker upgrade buttons (not paused or in gacha or dying)
+        if (action == MotionEvent.ACTION_UP && !inGacha && !isDying && !inDeathScreen) {
+            val x = event.getX(index)
+            val y = event.getY(index)
+
+            val cost = 10
+            when {
+                damageButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                    orbCurrency -= cost
+                    clickerDamageLevel++
+                    bulletDamage += bulletDamage * 0.01f // +1% permanent
+                    return true
+                }
+                fireButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                    orbCurrency -= cost
+                    clickerFireRateLevel++
+                    fireRate += fireRate * 0.01f // +1% permanent
+                    return true
+                }
+                speedButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                    orbCurrency -= cost
+                    clickerSpeedLevel++
+                    playerSpeed += playerSpeed * 0.01f // +1% permanent
+                    return true
+                }
+                hpButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                    orbCurrency -= cost
+                    clickerHpLevel++
+                    maxHp += (maxHp * 0.01f).toInt() // +1% permanent
+                    playerHp += (maxHp * 0.01f).toInt() // Also heal by the increase
+                    return true
+                }
+            }
+        }
 
         // Check settings icon tap (not paused or in gacha)
         if (action == MotionEvent.ACTION_UP && !inGacha) {
@@ -1535,28 +1589,28 @@ class GameView(context: Context) : View(context) {
         }
 
         // Button 1: Damage (+1% per level, costs 10 orbs)
-        val damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+        damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
         canvas.drawRoundRect(damageButtonRect, 8f, 8f, buttonBgPaint)
         canvas.drawRoundRect(damageButtonRect, 8f, 8f, buttonBorderPaint)
         canvas.drawText("DMG+", damageButtonRect.centerX(), damageButtonRect.centerY() - 8f, buttonTextPaint)
         canvas.drawText("$clickerDamageLevel (10)", damageButtonRect.centerX(), damageButtonRect.centerY() + 8f, buttonTextPaint)
 
         // Button 2: Fire Rate
-        val fireButtonRect = RectF(buttonStartX + buttonWidth + buttonGap, buttonY, buttonStartX + buttonWidth * 2 + buttonGap, buttonY + buttonHeight)
+        fireButtonRect = RectF(buttonStartX + buttonWidth + buttonGap, buttonY, buttonStartX + buttonWidth * 2 + buttonGap, buttonY + buttonHeight)
         canvas.drawRoundRect(fireButtonRect, 8f, 8f, buttonBgPaint)
         canvas.drawRoundRect(fireButtonRect, 8f, 8f, buttonBorderPaint)
         canvas.drawText("FIRE+", fireButtonRect.centerX(), fireButtonRect.centerY() - 8f, buttonTextPaint)
         canvas.drawText("$clickerFireRateLevel (10)", fireButtonRect.centerX(), fireButtonRect.centerY() + 8f, buttonTextPaint)
 
         // Button 3: Speed
-        val speedButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 2, buttonY, buttonStartX + buttonWidth * 3 + buttonGap * 2, buttonY + buttonHeight)
+        speedButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 2, buttonY, buttonStartX + buttonWidth * 3 + buttonGap * 2, buttonY + buttonHeight)
         canvas.drawRoundRect(speedButtonRect, 8f, 8f, buttonBgPaint)
         canvas.drawRoundRect(speedButtonRect, 8f, 8f, buttonBorderPaint)
         canvas.drawText("SPD+", speedButtonRect.centerX(), speedButtonRect.centerY() - 8f, buttonTextPaint)
         canvas.drawText("$clickerSpeedLevel (10)", speedButtonRect.centerX(), speedButtonRect.centerY() + 8f, buttonTextPaint)
 
         // Button 4: HP
-        val hpButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 3, buttonY, buttonStartX + buttonWidth * 4 + buttonGap * 3, buttonY + buttonHeight)
+        hpButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 3, buttonY, buttonStartX + buttonWidth * 4 + buttonGap * 3, buttonY + buttonHeight)
         canvas.drawRoundRect(hpButtonRect, 8f, 8f, buttonBgPaint)
         canvas.drawRoundRect(hpButtonRect, 8f, 8f, buttonBorderPaint)
         canvas.drawText("HP+", hpButtonRect.centerX(), hpButtonRect.centerY() - 8f, buttonTextPaint)
