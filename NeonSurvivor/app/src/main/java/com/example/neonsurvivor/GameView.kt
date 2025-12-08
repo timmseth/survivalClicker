@@ -143,6 +143,77 @@ class GameView(context: Context) : View(context) {
         style = Paint.Style.FILL
     }
 
+    // Additional paints for UI elements (moved out of draw loop for performance)
+    private val wallPaint = Paint().apply {
+        color = Color.rgb(255, 105, 180)  // Hot pink
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val wallBorderPaint = Paint().apply {
+        color = Color.rgb(255, 20, 147)  // Deep pink
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        isAntiAlias = true
+    }
+    private val greenOrbPaint = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val greenOrbGlowPaint = Paint().apply {
+        color = Color.GREEN
+        isAntiAlias = true
+        maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
+    }
+    private val powerUpIconPaint = Paint().apply {
+        color = Color.BLACK
+        textSize = 28f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        isAntiAlias = true
+    }
+    private val currencyPaint = Paint().apply {
+        color = Color.GREEN
+        textSize = 32f
+        textAlign = Paint.Align.LEFT
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        isAntiAlias = true
+    }.apply {
+        setShadowLayer(8f, 0f, 0f, Color.GREEN)
+    }
+    private val buttonBgPaint = Paint().apply {
+        color = Color.argb(120, 0, 100, 0)
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val buttonBorderPaint = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        isAntiAlias = true
+    }
+    private val buttonTextPaint = Paint().apply {
+        color = Color.WHITE
+        textSize = 18f
+        textAlign = Paint.Align.CENTER
+        isAntiAlias = true
+    }
+    private val pauseBgPaint = Paint().apply {
+        color = Color.argb(80, 0, 0, 0)
+        style = Paint.Style.FILL
+    }
+    private val pauseIconPaint = Paint().apply {
+        color = Color.CYAN
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val pauseIconBorderPaint = Paint().apply {
+        color = Color.argb(100, 0, 255, 255)
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        isAntiAlias = true
+    }
+
     // Player sprite animation
     private val playerIdleSprite: Bitmap
     private val playerRunSpriteLeft: Bitmap
@@ -1578,14 +1649,7 @@ class GameView(context: Context) : View(context) {
         for (p in powerUps) {
             canvas.drawCircle(p.x, p.y, 35f, powerUpGlowPaint)
             canvas.drawCircle(p.x, p.y, 22f, powerUpPaint)
-            // Draw icon/letter for power-up type
-            val iconPaint = Paint().apply {
-                color = Color.BLACK
-                textSize = 28f
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                isAntiAlias = true
-            }
+            // Draw icon/letter for power-up type (using class-level paint)
             val icon = when (p.type) {
                 PowerUpType.SPREAD_SHOT -> "S"
                 PowerUpType.RAPID_FIRE -> "R"
@@ -1604,37 +1668,16 @@ class GameView(context: Context) : View(context) {
                 PowerUpType.MULTISHOT -> "X"
                 PowerUpType.SHOCKWAVE -> "W"
             }
-            canvas.drawText(icon, p.x, p.y + 10f, iconPaint)
+            canvas.drawText(icon, p.x, p.y + 10f, powerUpIconPaint)
         }
 
-        // Draw pink walls
-        val wallPaint = Paint().apply {
-            color = Color.rgb(255, 105, 180)  // Hot pink
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-        val wallBorderPaint = Paint().apply {
-            color = Color.rgb(255, 20, 147)  // Deep pink
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-            isAntiAlias = true
-        }
+        // Draw pink walls (using class-level paints)
         for (wall in walls) {
             canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallPaint)
             canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallBorderPaint)
         }
 
-        // Draw green orbs (currency)
-        val greenOrbPaint = Paint().apply {
-            color = Color.GREEN
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-        val greenOrbGlowPaint = Paint().apply {
-            color = Color.GREEN
-            isAntiAlias = true
-            maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
-        }
+        // Draw green orbs (currency - using class-level paints)
         for (orb in greenOrbs) {
             canvas.drawCircle(orb.x, orb.y, 20f, greenOrbGlowPaint)
             canvas.drawCircle(orb.x, orb.y, 10f, greenOrbPaint)
@@ -1712,40 +1755,14 @@ class GameView(context: Context) : View(context) {
         val buttonHeight = 65f  // Increased from 50f for easier touching
         val buttonGap = 15f  // Increased gap
 
-        // Currency display
+        // Currency display (using class-level paint)
         val currencyText = "Orbs: $orbCurrency"
-        val currencyPaint = Paint().apply {
-            color = Color.GREEN
-            textSize = 32f  // Slightly larger
-            textAlign = Paint.Align.LEFT
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-            setShadowLayer(8f, 0f, 0f, Color.GREEN)
-        }
         canvas.drawText(currencyText, 20f, clickerY, currencyPaint)
 
-        // Upgrade buttons (4 buttons in a row, centered with equal margins)
+        // Upgrade buttons (4 buttons in a row, centered with equal margins - using class-level paints)
         val totalButtonsWidth = buttonWidth * 4 + buttonGap * 3
         val buttonStartX = (w - totalButtonsWidth) / 2f  // Center the row
         val buttonY = clickerY + 25f
-
-        val buttonBgPaint = Paint().apply {
-            color = Color.argb(120, 0, 100, 0)  // Slightly more opaque
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-        val buttonBorderPaint = Paint().apply {
-            color = Color.GREEN
-            style = Paint.Style.STROKE
-            strokeWidth = 3f  // Thicker border
-            isAntiAlias = true
-        }
-        val buttonTextPaint = Paint().apply {
-            color = Color.WHITE
-            textSize = 18f  // Larger text
-            textAlign = Paint.Align.CENTER
-            isAntiAlias = true
-        }
 
         // Button 1: Damage (+1% per level, costs 10 orbs)
         damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
@@ -1775,19 +1792,7 @@ class GameView(context: Context) : View(context) {
         canvas.drawText("HP+", hpButtonRect.centerX(), hpButtonRect.centerY() - 10f, buttonTextPaint)
         canvas.drawText("$clickerHpLevel (10)", hpButtonRect.centerX(), hpButtonRect.centerY() + 10f, buttonTextPaint)
 
-        // Pause icon with semi-transparent background
-        val pauseBgPaint = Paint().apply {
-            color = Color.argb(80, 0, 0, 0)
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-        val pauseIconPaint = Paint().apply {
-            color = Color.CYAN
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-
-        // Draw semi-transparent background circle
+        // Pause icon (using class-level paints)
         canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 30f, pauseBgPaint)
 
         // Draw pause bars (two vertical rectangles)
