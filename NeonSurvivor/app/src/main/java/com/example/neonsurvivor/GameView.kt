@@ -289,6 +289,8 @@ class GameView(context: Context) : View(context) {
     // Waves + gacha
     private var wave = 1
     private var inGacha = false
+    private var gachaButtonsDisabled = false
+    private var gachaButtonEnableTimer = 0f
 
     // Death screen
     private var inDeathScreen = false
@@ -526,6 +528,14 @@ class GameView(context: Context) : View(context) {
         updateBlood(dt)
         updateScreenEffects(dt)
 
+        // Update gacha button enable timer
+        if (gachaButtonsDisabled && gachaButtonEnableTimer > 0f) {
+            gachaButtonEnableTimer -= dt
+            if (gachaButtonEnableTimer <= 0f) {
+                gachaButtonsDisabled = false
+            }
+        }
+
         if (!inGacha && enemies.isEmpty()) {
             openGacha()
         }
@@ -556,7 +566,7 @@ class GameView(context: Context) : View(context) {
             val len = hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat()
             if (len > 0.01f) {
                 val nx = joyDx / len
-                val ny = joyDx / len
+                val ny = joyDy / len  // Fixed: was joyDx
                 // Apply speed boost stacks (10% per stack)
                 val speedMultiplier = 1f + (speedBoostStacks * 0.10f)
                 playerX += nx * playerSpeed * speedMultiplier * dt
@@ -1045,6 +1055,10 @@ class GameView(context: Context) : View(context) {
     private fun openGacha() {
         inGacha = true
 
+        // Disable buttons for 1 second to prevent accidental clicks
+        gachaButtonsDisabled = true
+        gachaButtonEnableTimer = 1f
+
         // Reset joystick state to prevent auto-run after unpause
         joyPointerId = -1
         joyActive = false
@@ -1090,10 +1104,14 @@ class GameView(context: Context) : View(context) {
         wave += 1
         spawnWave()
         inGacha = false
+
+        // Start countdown like settings menu
+        countdownValue = 3
+        countdownAlpha = 1f
     }
 
     private fun handleGachaTouch(x: Float, y: Float) {
-        if (!inGacha) return
+        if (!inGacha || gachaButtonsDisabled) return
         val cardWidth = width * 0.8f
         val cardHeight = height * 0.12f
         val startX = (width - cardWidth) / 2f
