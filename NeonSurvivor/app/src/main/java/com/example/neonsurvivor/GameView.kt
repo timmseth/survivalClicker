@@ -280,6 +280,7 @@ class GameView(context: Context) : View(context) {
         SHOCKWAVE         // Create damaging wave on kill
     }
     data class PowerUp(var x: Float, var y: Float, val type: PowerUpType, var vy: Float = 150f)
+    data class GreenOrb(var x: Float, var y: Float, var vx: Float = 0f, var vy: Float = 0f)
 
     private val enemies = mutableListOf<Enemy>()
     private val bullets = mutableListOf<Bullet>()
@@ -287,6 +288,15 @@ class GameView(context: Context) : View(context) {
     private val powerUps = mutableListOf<PowerUp>()
     private val guaranteedDropEnemies = mutableSetOf<Enemy>()
     private val walls = mutableListOf<Wall>()
+    private val greenOrbs = mutableListOf<GreenOrb>()
+
+    // Clicker currency and upgrades
+    private var orbCurrency = 0
+    private var orbitalCount = 0
+    private var clickerDamageLevel = 0
+    private var clickerFireRateLevel = 0
+    private var clickerSpeedLevel = 0
+    private var clickerHpLevel = 0
 
     // Waves + gacha
     private var wave = 1
@@ -529,6 +539,7 @@ class GameView(context: Context) : View(context) {
 
         updateBlood(dt)
         updateScreenEffects(dt)
+        updateGreenOrbs(dt)
 
         // Update gacha button enable timer
         if (gachaButtonsDisabled && gachaButtonEnableTimer > 0f) {
@@ -740,6 +751,11 @@ class GameView(context: Context) : View(context) {
                             powerUps.add(PowerUp(hitEnemy.x, hitEnemy.y, powerUpType))
                         }
 
+                        // 60% chance to drop green orb currency
+                        if (Random.nextFloat() < 0.6f) {
+                            greenOrbs.add(GreenOrb(hitEnemy.x, hitEnemy.y))
+                        }
+
                         // Vampire effect - heal on kill
                         if (vampireStacks > 0) {
                             playerHp = min(playerHp + vampireStacks, maxHp)
@@ -932,6 +948,36 @@ class GameView(context: Context) : View(context) {
                 }
             } else if (p.y > playerY + height / 2f + 100f) {
                 // Remove if off screen
+                it.remove()
+            }
+        }
+    }
+
+    private fun updateGreenOrbs(dt: Float) {
+        val it = greenOrbs.iterator()
+        while (it.hasNext()) {
+            val orb = it.next()
+
+            // Check distance to player
+            val dx = playerX - orb.x
+            val dy = playerY - orb.y
+            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+
+            // Seek player if within generous radius (300f)
+            if (dist < 300f) {
+                val seekSpeed = 250f
+                orb.vx = (dx / dist) * seekSpeed
+                orb.vy = (dy / dist) * seekSpeed
+                orb.x += orb.vx * dt
+                orb.y += orb.vy * dt
+
+                // Collect if touching player
+                if (dist < playerRadius + 15f) {
+                    orbCurrency++
+                    it.remove()
+                }
+            } else if (orb.y > playerY + height / 2f + 100f) {
+                // Remove if too far off screen
                 it.remove()
             }
         }
@@ -1358,6 +1404,22 @@ class GameView(context: Context) : View(context) {
             canvas.drawText(icon, p.x, p.y + 10f, iconPaint)
         }
 
+        // Draw green orbs (currency)
+        val greenOrbPaint = Paint().apply {
+            color = Color.GREEN
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val greenOrbGlowPaint = Paint().apply {
+            color = Color.GREEN
+            isAntiAlias = true
+            maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
+        }
+        for (orb in greenOrbs) {
+            canvas.drawCircle(orb.x, orb.y, 20f, greenOrbGlowPaint)
+            canvas.drawCircle(orb.x, orb.y, 10f, greenOrbPaint)
+        }
+
         // Draw player sprite
         val isMoving = joyActive && hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat() > 0.01f
 
@@ -1431,6 +1493,74 @@ class GameView(context: Context) : View(context) {
         val hpRatio = (playerHp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f)
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
         canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
+
+        // Clicker UI - Currency display and upgrade buttons
+        val clickerY = barY + barHeight + 80f
+        val buttonWidth = w * 0.22f
+        val buttonHeight = 50f
+        val buttonGap = 10f
+
+        // Currency display
+        val currencyText = "Orbs: $orbCurrency"
+        val currencyPaint = Paint().apply {
+            color = Color.GREEN
+            textSize = 28f
+            textAlign = Paint.Align.LEFT
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(8f, 0f, 0f, Color.GREEN)
+        }
+        canvas.drawText(currencyText, 20f, clickerY, currencyPaint)
+
+        // Upgrade buttons (4 buttons in a row)
+        val buttonStartX = 20f
+        val buttonY = clickerY + 20f
+
+        val buttonBgPaint = Paint().apply {
+            color = Color.argb(100, 0, 100, 0)
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val buttonBorderPaint = Paint().apply {
+            color = Color.GREEN
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            isAntiAlias = true
+        }
+        val buttonTextPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 16f
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+        }
+
+        // Button 1: Damage (+1% per level, costs 10 orbs)
+        val damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+        canvas.drawRoundRect(damageButtonRect, 8f, 8f, buttonBgPaint)
+        canvas.drawRoundRect(damageButtonRect, 8f, 8f, buttonBorderPaint)
+        canvas.drawText("DMG+", damageButtonRect.centerX(), damageButtonRect.centerY() - 8f, buttonTextPaint)
+        canvas.drawText("$clickerDamageLevel (10)", damageButtonRect.centerX(), damageButtonRect.centerY() + 8f, buttonTextPaint)
+
+        // Button 2: Fire Rate
+        val fireButtonRect = RectF(buttonStartX + buttonWidth + buttonGap, buttonY, buttonStartX + buttonWidth * 2 + buttonGap, buttonY + buttonHeight)
+        canvas.drawRoundRect(fireButtonRect, 8f, 8f, buttonBgPaint)
+        canvas.drawRoundRect(fireButtonRect, 8f, 8f, buttonBorderPaint)
+        canvas.drawText("FIRE+", fireButtonRect.centerX(), fireButtonRect.centerY() - 8f, buttonTextPaint)
+        canvas.drawText("$clickerFireRateLevel (10)", fireButtonRect.centerX(), fireButtonRect.centerY() + 8f, buttonTextPaint)
+
+        // Button 3: Speed
+        val speedButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 2, buttonY, buttonStartX + buttonWidth * 3 + buttonGap * 2, buttonY + buttonHeight)
+        canvas.drawRoundRect(speedButtonRect, 8f, 8f, buttonBgPaint)
+        canvas.drawRoundRect(speedButtonRect, 8f, 8f, buttonBorderPaint)
+        canvas.drawText("SPD+", speedButtonRect.centerX(), speedButtonRect.centerY() - 8f, buttonTextPaint)
+        canvas.drawText("$clickerSpeedLevel (10)", speedButtonRect.centerX(), speedButtonRect.centerY() + 8f, buttonTextPaint)
+
+        // Button 4: HP
+        val hpButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 3, buttonY, buttonStartX + buttonWidth * 4 + buttonGap * 3, buttonY + buttonHeight)
+        canvas.drawRoundRect(hpButtonRect, 8f, 8f, buttonBgPaint)
+        canvas.drawRoundRect(hpButtonRect, 8f, 8f, buttonBorderPaint)
+        canvas.drawText("HP+", hpButtonRect.centerX(), hpButtonRect.centerY() - 8f, buttonTextPaint)
+        canvas.drawText("$clickerHpLevel (10)", hpButtonRect.centerX(), hpButtonRect.centerY() + 8f, buttonTextPaint)
 
         // Pause icon with semi-transparent background
         val pauseBgPaint = Paint().apply {
