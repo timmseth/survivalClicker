@@ -260,6 +260,7 @@ class GameView(context: Context) : View(context) {
 
     data class Bullet(var x: Float, var y: Float, var vx: Float, var vy: Float, var isPlayerBullet: Boolean = true)
     data class BloodParticle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float)
+    data class Wall(val x: Float, val y: Float, val width: Float, val height: Float)
 
     enum class PowerUpType {
         // Original powerups
@@ -285,6 +286,7 @@ class GameView(context: Context) : View(context) {
     private val blood = mutableListOf<BloodParticle>()
     private val powerUps = mutableListOf<PowerUp>()
     private val guaranteedDropEnemies = mutableSetOf<Enemy>()
+    private val walls = mutableListOf<Wall>()
 
     // Waves + gacha
     private var wave = 1
@@ -436,11 +438,11 @@ class GameView(context: Context) : View(context) {
                 else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
             }
 
-            // Logarithmic HP scaling (slows down at high waves)
-            val hp = 30f + sqrt(wave.toFloat()) * 20f
+            // Logarithmic HP scaling (gentler early game)
+            val hp = 20f + sqrt(wave.toFloat()) * 15f  // Reduced from 30 + 20
 
-            // Speed caps at 350f to keep game playable
-            val baseSpeed = min(100f + wave * 8f, 350f)
+            // Speed caps at 350f, starts slower
+            val baseSpeed = min(80f + wave * 8f, 350f)  // Starts at 80 instead of 100
 
             // Elite enemies after wave 10: 20% chance for 2x HP, guaranteed drop
             val isElite = wave >= 10 && rnd.nextFloat() < 0.2f
