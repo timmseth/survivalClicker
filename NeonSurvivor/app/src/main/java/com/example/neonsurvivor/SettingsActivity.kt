@@ -36,6 +36,7 @@ class SettingsView(context: Context) : View(context) {
     private var musicVolume = prefs.getFloat("music_volume", 0.12f)
     private var rainVolume = prefs.getFloat("rain_volume", 1.0f)
     private var powerupsEnabled = prefs.getBoolean("powerups_enabled", true)
+    private var usePortalMusic = prefs.getBoolean("use_portal_music", false)
 
     // Paints
     private val bgPaint = Paint()
@@ -83,6 +84,7 @@ class SettingsView(context: Context) : View(context) {
     private var musicToggleRect = RectF()
     private var soundToggleRect = RectF()
     private var powerupsToggleRect = RectF()
+    private var portalMusicToggleRect = RectF()
     private var musicVolumeSliderRect = RectF()
     private var rainVolumeSliderRect = RectF()
     private var saveButtonRect = RectF()
@@ -133,6 +135,11 @@ class SettingsView(context: Context) : View(context) {
         powerupsToggleRect = RectF(
             startX, h * 0.54f,
             startX + toggleWidth, h * 0.54f + toggleHeight
+        )
+
+        portalMusicToggleRect = RectF(
+            startX, h * 0.62f,
+            startX + toggleWidth, h * 0.62f + toggleHeight
         )
 
         // Volume sliders (tripled height for easier touch)
@@ -218,6 +225,21 @@ class SettingsView(context: Context) : View(context) {
         labelPaint.textAlign = Paint.Align.CENTER
         canvas.drawText(if (powerupsEnabled) "ON" else "OFF",
             powerupsToggleRect.centerX(), powerupsToggleRect.centerY() + 18f, labelPaint)
+        labelPaint.textAlign = Paint.Align.LEFT
+
+        // Portal music toggle
+        val smallLabelPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 40f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        canvas.drawText("PORTAL", w * 0.25f, portalMusicToggleRect.centerY() + 14f, smallLabelPaint)
+        canvas.drawRoundRect(portalMusicToggleRect, 40f, 40f, if (usePortalMusic) toggleOnPaint else toggleOffPaint)
+        canvas.drawRoundRect(portalMusicToggleRect, 40f, 40f, buttonBorderPaint)
+        labelPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText(if (usePortalMusic) "ON" else "OFF",
+            portalMusicToggleRect.centerX(), portalMusicToggleRect.centerY() + 18f, labelPaint)
         labelPaint.textAlign = Paint.Align.LEFT
 
         // Music volume slider
@@ -360,6 +382,16 @@ class SettingsView(context: Context) : View(context) {
                     powerupsToggleRect.contains(x, y) -> {
                         powerupsEnabled = !powerupsEnabled
                         prefs.edit().putBoolean("powerups_enabled", powerupsEnabled).apply()
+                        invalidate()
+                        return true
+                    }
+                    portalMusicToggleRect.contains(x, y) -> {
+                        usePortalMusic = !usePortalMusic
+                        prefs.edit().putBoolean("use_portal_music", usePortalMusic).apply()
+
+                        // Restart music with new track
+                        AudioManager.stopMusic()
+                        AudioManager.startMusic(context)
                         invalidate()
                         return true
                     }

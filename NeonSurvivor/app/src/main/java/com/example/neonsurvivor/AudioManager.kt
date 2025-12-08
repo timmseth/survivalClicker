@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.media.MediaPlayer
 import android.os.Build
 import kotlin.math.*
 
@@ -12,6 +13,8 @@ object AudioManager {
     private var musicTrack: AudioTrack? = null
     private var musicThread: Thread? = null
     private var isPlaying = false
+
+    private var mediaPlayer: MediaPlayer? = null // For OGG file playback
 
     private var rainTrack: AudioTrack? = null
     private var rainThread: Thread? = null
@@ -31,7 +34,23 @@ object AudioManager {
         // Load saved volume
         musicVolume = prefs.getFloat("music_volume", 0.12f)
 
+        // Check which music track to use
+        val usePortalMusic = prefs.getBoolean("use_portal_music", false)
+
         isPlaying = true
+
+        if (usePortalMusic) {
+            // Use Portal to Underworld OGG file
+            try {
+                mediaPlayer = MediaPlayer.create(context, R.raw.portal_underworld)
+                mediaPlayer?.isLooping = true
+                mediaPlayer?.setVolume(musicVolume, musicVolume)
+                mediaPlayer?.start()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            return
+        }
 
         musicThread = Thread {
             try {
@@ -121,6 +140,13 @@ object AudioManager {
 
     fun stopMusic() {
         isPlaying = false
+
+        // Stop MediaPlayer if it was being used
+        mediaPlayer?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
+
+        // Stop procedural music if it was being used
         musicThread?.join(500)
         musicTrack?.stop()
         musicTrack?.release()

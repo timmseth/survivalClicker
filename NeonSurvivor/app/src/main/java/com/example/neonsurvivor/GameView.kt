@@ -239,7 +239,9 @@ class GameView(context: Context) : View(context) {
         var hp: Float,
         val maxHp: Float,
         val type: EnemyType,
-        var shootCooldown: Float = 0f
+        var shootCooldown: Float = 0f,
+        var animFrame: Int = 0,
+        var animTime: Float = 0f
     ) {
         fun getCornerCount(): Int = when(type) {
             EnemyType.CIRCLE -> 0
@@ -507,6 +509,21 @@ class GameView(context: Context) : View(context) {
             enemies.add(enemy)
         }
 
+        // Spawn 3-6 random pink wall obstacles per wave
+        walls.clear()
+        val wallCount = 3 + rnd.nextInt(4)  // 3-6 walls
+        for (i in 0 until wallCount) {
+            // Random size and position near player but not too close
+            val wallWidth = 50f + rnd.nextFloat() * 100f  // 50-150px wide
+            val wallHeight = 20f  // Short walls
+
+            // Spawn in area around player (within screen bounds)
+            val wx = playerX - width/3f + rnd.nextFloat() * (width * 2f/3f)
+            val wy = playerY - height/3f + rnd.nextFloat() * (height * 2f/3f)
+
+            walls.add(Wall(wx, wy, wallWidth, wallHeight))
+        }
+
         if (playerHp <= 0) {
             playerHp = maxHp
         }
@@ -597,8 +614,25 @@ class GameView(context: Context) : View(context) {
                 val ny = joyDy / len  // Fixed: was joyDx
                 // Apply speed boost stacks (10% per stack)
                 val speedMultiplier = 1f + (speedBoostStacks * 0.10f)
-                playerX += nx * playerSpeed * speedMultiplier * dt
-                playerY += ny * playerSpeed * speedMultiplier * dt
+                val newX = playerX + nx * playerSpeed * speedMultiplier * dt
+                val newY = playerY + ny * playerSpeed * speedMultiplier * dt
+
+                // Check wall collision
+                var blockedByWall = false
+                for (wall in walls) {
+                    if (newX - playerRadius < wall.x + wall.width &&
+                        newX + playerRadius > wall.x &&
+                        newY - playerRadius < wall.y + wall.height &&
+                        newY + playerRadius > wall.y) {
+                        blockedByWall = true
+                        break
+                    }
+                }
+
+                if (!blockedByWall) {
+                    playerX = newX
+                    playerY = newY
+                }
                 isMoving = true
 
                 // Track facing direction for sprite flipping
@@ -645,8 +679,64 @@ class GameView(context: Context) : View(context) {
             if (dist > 1f) {
                 val nx = dx / dist
                 val ny = dy / dist
-                e.x += nx * e.speed * dt
-                e.y += ny * e.speed * dt
+                val newX = e.x + nx * e.speed * dt
+                val newY = e.y + ny * e.speed * dt
+
+                // Simple wall pathfinding: if blocked, try sliding along wall
+                var blockedByWall = false
+                for (wall in walls) {
+                    if (newX - e.radius < wall.x + wall.width &&
+                        newX + e.radius > wall.x &&
+                        newY - e.radius < wall.y + wall.height &&
+                        newY + e.radius > wall.y) {
+                        blockedByWall = true
+                        break
+                    }
+                }
+
+                if (!blockedByWall) {
+                    e.x = newX
+                    e.y = newY
+                } else {
+                    // Try moving just in X or Y direction to slide around wall
+                    val tryX = e.x + nx * e.speed * dt
+                    var canMoveX = true
+                    for (wall in walls) {
+                        if (tryX - e.radius < wall.x + wall.width &&
+                            tryX + e.radius > wall.x &&
+                            e.y - e.radius < wall.y + wall.height &&
+                            e.y + e.radius > wall.y) {
+                            canMoveX = false
+                            break
+                        }
+                    }
+                    if (canMoveX) {
+                        e.x = tryX
+                    } else {
+                        // Try moving just in Y
+                        val tryY = e.y + ny * e.speed * dt
+                        var canMoveY = true
+                        for (wall in walls) {
+                            if (e.x - e.radius < wall.x + wall.width &&
+                                e.x + e.radius > wall.x &&
+                                tryY - e.radius < wall.y + wall.height &&
+                                tryY + e.radius > wall.y) {
+                                canMoveY = false
+                                break
+                            }
+                        }
+                        if (canMoveY) {
+                            e.y = tryY
+                        }
+                    }
+                }
+
+                // Update animation
+                e.animTime += dt
+                if (e.animTime >= 0.2f) {  // 5 FPS animation
+                    e.animTime = 0f
+                    e.animFrame = (e.animFrame + 1) % 3
+                }
             }
 
             // Update shoot cooldown
@@ -721,6 +811,20 @@ class GameView(context: Context) : View(context) {
             val b = bulletIt.next()
             b.x += b.vx * dt
             b.y += b.vy * dt
+
+            // Check wall collision - bullets are blocked
+            var hitWall = false
+            for (wall in walls) {
+                if (b.x >= wall.x && b.x <= wall.x + wall.width &&
+                    b.y >= wall.y && b.y <= wall.y + wall.height) {
+                    hitWall = true
+                    break
+                }
+            }
+            if (hitWall) {
+                bulletIt.remove()
+                continue
+            }
 
             // Remove bullets that are far from player (world coordinates, not screen coordinates)
             val dx = b.x - playerX
@@ -1404,22 +1508,70 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Draw enemies as drone sprites
+        // Draw enemies with animated sprites
         for (e in enemies) {
             val glowRadius = e.getGlowRadius()
 
             // Draw glow behind sprite
             canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
 
-            // Draw drone sprite (scaled to enemy radius * 2 for diameter)
-            val enemySize = e.radius * 2f
+            // Determine which row based on enemy type (3 enemy types, 1 per row)
+            val row = when (e.type) {
+                EnemyType.CIRCLE -> 0
+                EnemyType.TRIANGLE -> 1
+                else -> 2  // SQUARE, PENTAGON, HEXAGON use row 2
+            }
+
+            // Determine direction and animation column
+            // Chunks: 1,4,7=down  2,5,8=left  3,6,9=up
+            // Calculate direction to player for orientation
+            val dx = playerX - e.x
+            val dy = playerY - e.y
+            val absX = abs(dx)
+            val absY = abs(dy)
+
+            val (baseCol, flipHorizontal) = when {
+                absY > absX && dy > 0 -> Pair(0, false)  // Down (columns 1,4,7 = indices 0,3,6)
+                absY > absX && dy < 0 -> Pair(2, false)  // Up (columns 3,6,9 = indices 2,5,8)
+                absX >= absY && dx < 0 -> Pair(1, false) // Left (columns 2,5,8 = indices 1,4,7)
+                else -> Pair(1, true)  // Right (flip left sprite)
+            }
+
+            // 3 frames per direction: baseCol, baseCol+3, baseCol+6
+            val frameIndex = when (e.animFrame % 3) {
+                0 -> baseCol
+                1 -> baseCol + 3
+                else -> baseCol + 6
+            }
+
+            // 16px chunks, 9 columns × 3 rows
+            val chunkSize = 16
+            val srcRect = Rect(
+                frameIndex * chunkSize,
+                row * chunkSize,
+                (frameIndex + 1) * chunkSize,
+                (row + 1) * chunkSize
+            )
+
+            // Draw sprite (scaled to enemy radius * 2)
+            val enemySize = e.radius * 2.5f  // Slightly larger to see details
+
+            if (flipHorizontal) {
+                canvas.save()
+                canvas.scale(-1f, 1f, e.x, e.y)  // Flip horizontally around enemy center
+            }
+
             val dstRect = RectF(
                 e.x - enemySize / 2f,
                 e.y - enemySize / 2f,
                 e.x + enemySize / 2f,
                 e.y + enemySize / 2f
             )
-            canvas.drawBitmap(enemyDroneSprite, null, dstRect, spritePaint)
+            canvas.drawBitmap(enemyDroneSprite, srcRect, dstRect, spritePaint)
+
+            if (flipHorizontal) {
+                canvas.restore()
+            }
         }
 
         // Draw power-ups (larger and clearer)
@@ -1453,6 +1605,23 @@ class GameView(context: Context) : View(context) {
                 PowerUpType.SHOCKWAVE -> "W"
             }
             canvas.drawText(icon, p.x, p.y + 10f, iconPaint)
+        }
+
+        // Draw pink walls
+        val wallPaint = Paint().apply {
+            color = Color.rgb(255, 105, 180)  // Hot pink
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val wallBorderPaint = Paint().apply {
+            color = Color.rgb(255, 20, 147)  // Deep pink
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+            isAntiAlias = true
+        }
+        for (wall in walls) {
+            canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallPaint)
+            canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallBorderPaint)
         }
 
         // Draw green orbs (currency)
