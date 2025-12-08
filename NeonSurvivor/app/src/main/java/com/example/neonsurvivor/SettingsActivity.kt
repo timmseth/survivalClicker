@@ -35,6 +35,7 @@ class SettingsView(context: Context) : View(context) {
     private var soundEnabled = prefs.getBoolean("sound_enabled", true)
     private var musicVolume = prefs.getFloat("music_volume", 0.12f)
     private var rainVolume = prefs.getFloat("rain_volume", 1.0f)
+    private var powerupsEnabled = prefs.getBoolean("powerups_enabled", true)
 
     // Paints
     private val bgPaint = Paint()
@@ -81,6 +82,7 @@ class SettingsView(context: Context) : View(context) {
     // UI elements
     private var musicToggleRect = RectF()
     private var soundToggleRect = RectF()
+    private var powerupsToggleRect = RectF()
     private var musicVolumeSliderRect = RectF()
     private var rainVolumeSliderRect = RectF()
     private var saveButtonRect = RectF()
@@ -119,13 +121,18 @@ class SettingsView(context: Context) : View(context) {
         val startX = w * 0.6f
 
         musicToggleRect = RectF(
-            startX, h * 0.35f,
-            startX + toggleWidth, h * 0.35f + toggleHeight
+            startX, h * 0.30f,
+            startX + toggleWidth, h * 0.30f + toggleHeight
         )
 
         soundToggleRect = RectF(
-            startX, h * 0.50f,
-            startX + toggleWidth, h * 0.50f + toggleHeight
+            startX, h * 0.42f,
+            startX + toggleWidth, h * 0.42f + toggleHeight
+        )
+
+        powerupsToggleRect = RectF(
+            startX, h * 0.54f,
+            startX + toggleWidth, h * 0.54f + toggleHeight
         )
 
         // Volume sliders (tripled height for easier touch)
@@ -134,13 +141,13 @@ class SettingsView(context: Context) : View(context) {
         val sliderStartX = w * 0.3f
 
         musicVolumeSliderRect = RectF(
-            sliderStartX, h * 0.42f,
-            sliderStartX + sliderWidth, h * 0.42f + sliderHeight
+            sliderStartX, h * 0.36f,
+            sliderStartX + sliderWidth, h * 0.36f + sliderHeight
         )
 
         rainVolumeSliderRect = RectF(
-            sliderStartX, h * 0.58f,
-            sliderStartX + sliderWidth, h * 0.58f + sliderHeight
+            sliderStartX, h * 0.48f,
+            sliderStartX + sliderWidth, h * 0.48f + sliderHeight
         )
 
         // Save/Load buttons (side by side)
@@ -202,6 +209,15 @@ class SettingsView(context: Context) : View(context) {
         labelPaint.textAlign = Paint.Align.CENTER
         canvas.drawText(if (soundEnabled) "ON" else "OFF",
             soundToggleRect.centerX(), soundToggleRect.centerY() + 18f, labelPaint)
+        labelPaint.textAlign = Paint.Align.LEFT
+
+        // Powerups toggle
+        canvas.drawText("POWERUPS", w * 0.25f, powerupsToggleRect.centerY() + 18f, labelPaint)
+        canvas.drawRoundRect(powerupsToggleRect, 40f, 40f, if (powerupsEnabled) toggleOnPaint else toggleOffPaint)
+        canvas.drawRoundRect(powerupsToggleRect, 40f, 40f, buttonBorderPaint)
+        labelPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText(if (powerupsEnabled) "ON" else "OFF",
+            powerupsToggleRect.centerX(), powerupsToggleRect.centerY() + 18f, labelPaint)
         labelPaint.textAlign = Paint.Align.LEFT
 
         // Music volume slider
@@ -338,6 +354,12 @@ class SettingsView(context: Context) : View(context) {
                         } else {
                             AudioManager.stopRain()
                         }
+                        invalidate()
+                        return true
+                    }
+                    powerupsToggleRect.contains(x, y) -> {
+                        powerupsEnabled = !powerupsEnabled
+                        prefs.edit().putBoolean("powerups_enabled", powerupsEnabled).apply()
                         invalidate()
                         return true
                     }
