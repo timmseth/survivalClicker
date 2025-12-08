@@ -145,7 +145,8 @@ class GameView(context: Context) : View(context) {
 
     // Player sprite animation
     private val playerIdleSprite: Bitmap
-    private val playerRunSprite: Bitmap
+    private val playerRunSpriteLeft: Bitmap
+    private val playerRunSpriteRight: Bitmap
     private val playerHitSprite: Bitmap
     private val playerDeathSprite: Bitmap
     private var spriteFrameTime = 0f
@@ -329,7 +330,8 @@ class GameView(context: Context) : View(context) {
 
         // Load player sprites
         playerIdleSprite = BitmapFactory.decodeResource(resources, R.drawable.player_idle)
-        playerRunSprite = BitmapFactory.decodeResource(resources, R.drawable.player_run)
+        playerRunSpriteLeft = BitmapFactory.decodeResource(resources, R.drawable.run_left)
+        playerRunSpriteRight = BitmapFactory.decodeResource(resources, R.drawable.run_right)
         playerHitSprite = BitmapFactory.decodeResource(resources, R.drawable.player_attack) // Using attack as hit
         playerDeathSprite = BitmapFactory.decodeResource(resources, R.drawable.player_death)
     }
@@ -1490,7 +1492,8 @@ class GameView(context: Context) : View(context) {
                 totalFrames = 2 // Hit animation frames (player_attack.png used as hit)
             }
             isMoving -> {
-                spriteSheet = playerRunSprite
+                // Select correct sprite based on facing direction
+                spriteSheet = if (playerFacingLeft) playerRunSpriteLeft else playerRunSpriteRight
                 totalFrames = 8
             }
             else -> {
@@ -1511,22 +1514,13 @@ class GameView(context: Context) : View(context) {
             (currentFrame + 1) * frameHeight
         )
 
-        // Destination rect (where to draw on screen) - flip horizontally when facing left
-        val dstRect = if (playerFacingLeft) {
-            RectF(
-                playerX + spriteWidth / 2f,  // Flipped: right edge becomes left
-                playerY - spriteHeight / 2f,
-                playerX - spriteWidth / 2f,  // Flipped: left edge becomes right
-                playerY + spriteHeight / 2f
-            )
-        } else {
-            RectF(
-                playerX - spriteWidth / 2f,
-                playerY - spriteHeight / 2f,
-                playerX + spriteWidth / 2f,
-                playerY + spriteHeight / 2f
-            )
-        }
+        // Destination rect (where to draw on screen)
+        val dstRect = RectF(
+            playerX - spriteWidth / 2f,
+            playerY - spriteHeight / 2f,
+            playerX + spriteWidth / 2f,
+            playerY + spriteHeight / 2f
+        )
 
         // Draw neon glow behind sprite (smaller radius)
         canvas.drawCircle(playerX, playerY, spriteHeight / 2.5f, spriteGlowPaint)
