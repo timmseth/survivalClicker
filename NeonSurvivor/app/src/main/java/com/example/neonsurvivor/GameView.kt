@@ -475,17 +475,17 @@ class GameView(context: Context) : View(context) {
             pauseMenuTabRect = RectF(
                 w - tabWidth,
                 h / 2f - tabHeight / 2f,
-                w,
+                w.toFloat(),
                 h / 2f + tabHeight / 2f
             )
 
             // Pause menu flyout (slides in from right)
             val menuWidth = w * 0.85f
             pauseMenuRect = RectF(
-                w,  // Starts off-screen right
+                w.toFloat(),  // Starts off-screen right
                 0f,
                 w + menuWidth,
-                h
+                h.toFloat()
             )
 
             spawnWave()
