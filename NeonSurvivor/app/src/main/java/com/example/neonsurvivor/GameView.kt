@@ -240,8 +240,8 @@ class GameView(context: Context) : View(context) {
     private val playerHitSprite: Bitmap
     private val playerDeathSprite: Bitmap
 
-    // Enemy sprite
-    private val enemyDroneSprite: Bitmap
+    // Enemy sprites - 27 individual sprites loaded from split folder
+    private val enemySprites = mutableMapOf<Int, Bitmap>()
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
@@ -431,8 +431,14 @@ class GameView(context: Context) : View(context) {
         playerHitSprite = BitmapFactory.decodeResource(resources, R.drawable.player_attack) // Using attack as hit
         playerDeathSprite = BitmapFactory.decodeResource(resources, R.drawable.player_death)
 
-        // Load enemy sprites
-        enemyDroneSprite = BitmapFactory.decodeResource(resources, R.drawable.enemy_drone)
+        // Load 27 individual enemy sprites from split folder
+        for (i in 1..27) {
+            val spriteNum = String.format("%03d", i)
+            val resourceId = resources.getIdentifier("enemies$spriteNum", "drawable", context.packageName)
+            if (resourceId != 0) {
+                enemySprites[i] = BitmapFactory.decodeResource(resources, resourceId)
+            }
+        }
     }
 
     fun pause() {
@@ -1783,36 +1789,20 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Draw enemies with animated sprites
+        // Draw enemies with animated sprites using individual sprite files
         for (e in enemies) {
-            // Sprite sheet: chibi-layered.png = 9 columns × 3 rows
-            // Row 1 (index 0): Blue-hooded character
-            // Row 2 (index 1): Pink-haired character
-            // Row 3 (index 2): Brown-hooded character
-
-            // ENEMY TYPE 1 (CIRCLE) - Row 1
-            // Moving Down:  Column 1,4,7 (indices 0,3,6)
-            // Moving Left:  Column 2,5,8 (indices 1,4,7)
-            // Moving Up:    Column 3,6,9 (indices 2,5,8)
-            // Moving Right: Flip left sprite horizontally
-
-            // ENEMY TYPE 2 (TRIANGLE) - Row 2
-            // Moving Down:  Column 1,4,7 (indices 0,3,6)
-            // Moving Left:  Column 2,5,8 (indices 1,4,7)
-            // Moving Up:    Column 3,6,9 (indices 2,5,8)
-            // Moving Right: Flip left sprite horizontally
-
-            // ENEMY TYPE 3 (SQUARE/PENTAGON/HEXAGON) - Row 3
-            // Moving Down:  Column 1,4,7 (indices 0,3,6)
-            // Moving Left:  Column 2,5,8 (indices 1,4,7)
-            // Moving Up:    Column 3,6,9 (indices 2,5,8)
-            // Moving Right: Flip left sprite horizontally
-
-            val enemyRow = when (e.type) {
-                EnemyType.CIRCLE -> 1    // Row 1 (index 0)
-                EnemyType.TRIANGLE -> 2  // Row 2 (index 1)
-                else -> 3                // Row 3 (index 2) - SQUARE, PENTAGON, HEXAGON
-            }
+            // Row 1 character (Blue-hooded) - CIRCLE
+            //   moving down = 1,4,7
+            //   moving left = 2,5,8
+            //   moving up = 3,6,9
+            // Row 2 character (Pink-haired) - TRIANGLE
+            //   moving down = 10,13,16
+            //   moving left = 11,14,17
+            //   moving up = 12,15,18
+            // Row 3 character (Brown-hooded) - SQUARE/PENTAGON/HEXAGON
+            //   moving down = 19,22,25
+            //   moving left = 20,23,26
+            //   moving up = 21,24,27
 
             // Determine direction based on movement toward player
             val dx = playerX - e.x
@@ -1820,53 +1810,62 @@ class GameView(context: Context) : View(context) {
             val absX = abs(dx)
             val absY = abs(dy)
 
-            // Select column sequence for direction
-            val (firstColumn, flipHorizontal) = when {
-                absY > absX && dy > 0 -> Pair(1, false)  // Moving Down: columns 1,4,7
-                absY > absX && dy < 0 -> Pair(3, false)  // Moving Up: columns 3,6,9
-                absX >= absY && dx < 0 -> Pair(2, false) // Moving Left: columns 2,5,8
-                else -> Pair(2, true)  // Moving Right: flip left sprite
+            // Get the sprite number sequence for this enemy type and direction
+            val spriteSequence = when (e.type) {
+                EnemyType.CIRCLE -> when {
+                    absY > absX && dy > 0 -> intArrayOf(1, 4, 7)    // Down
+                    absY > absX && dy < 0 -> intArrayOf(3, 6, 9)    // Up
+                    absX >= absY && dx < 0 -> intArrayOf(2, 5, 8)   // Left
+                    else -> intArrayOf(2, 5, 8)                      // Right (flip left)
+                }
+                EnemyType.TRIANGLE -> when {
+                    absY > absX && dy > 0 -> intArrayOf(10, 13, 16)  // Down
+                    absY > absX && dy < 0 -> intArrayOf(12, 15, 18)  // Up
+                    absX >= absY && dx < 0 -> intArrayOf(11, 14, 17) // Left
+                    else -> intArrayOf(11, 14, 17)                    // Right (flip left)
+                }
+                else -> when {  // SQUARE, PENTAGON, HEXAGON
+                    absY > absX && dy > 0 -> intArrayOf(19, 22, 25)  // Down
+                    absY > absX && dy < 0 -> intArrayOf(21, 24, 27)  // Up
+                    absX >= absY && dx < 0 -> intArrayOf(20, 23, 26) // Left
+                    else -> intArrayOf(20, 23, 26)                    // Right (flip left)
+                }
             }
 
-            // 3 animation frames: cycle through columns (e.g., 1→4→7)
+            // Determine if we need to flip horizontally (moving right)
+            val flipHorizontal = absX >= absY && dx > 0
+
+            // Get current animation frame (cycle through 3 frames)
             val animIndex = e.animFrame % 3
-            val columnNumber = firstColumn + (animIndex * 3)  // 1,4,7 or 2,5,8 or 3,6,9
-            val columnIndex = columnNumber - 1  // Convert to 0-based index (0-8)
+            val spriteNumber = spriteSequence[animIndex]
 
-            // Use adjustable sprite scale from Settings menu slider
-            val spriteSizeInt = spriteScale.toInt()
+            // Get the sprite bitmap
+            val spriteBitmap = enemySprites[spriteNumber]
+            if (spriteBitmap != null) {
+                // Draw sprite (make it big enough to see clearly)
+                val enemySize = 60f
 
-            val rowIndex = enemyRow - 1  // Convert to 0-based (1,2,3 → 0,1,2)
-            val srcRect = Rect(
-                columnIndex * spriteSizeInt,
-                rowIndex * spriteSizeInt,
-                (columnIndex + 1) * spriteSizeInt,
-                (rowIndex + 1) * spriteSizeInt
-            )
+                // Draw glow BEHIND sprite
+                val glowRadius = e.getGlowRadius()
+                canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, enemyGlowPaint)
 
-            // Draw sprite (make it big enough to see clearly)
-            val enemySize = 60f  // Fixed size - large enough to see sprite clearly
+                // Flip horizontally if moving right
+                if (flipHorizontal) {
+                    canvas.save()
+                    canvas.scale(-1f, 1f, e.x, e.y)
+                }
 
-            // Draw glow BEHIND sprite (smaller than sprite)
-            val glowRadius = e.getGlowRadius()
-            canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, enemyGlowPaint)
+                val dstRect = RectF(
+                    e.x - enemySize / 2f,
+                    e.y - enemySize / 2f,
+                    e.x + enemySize / 2f,
+                    e.y + enemySize / 2f
+                )
+                canvas.drawBitmap(spriteBitmap, null, dstRect, spritePaint)
 
-            // Flip horizontally if moving right
-            if (flipHorizontal) {
-                canvas.save()
-                canvas.scale(-1f, 1f, e.x, e.y)
-            }
-
-            val dstRect = RectF(
-                e.x - enemySize / 2f,
-                e.y - enemySize / 2f,
-                e.x + enemySize / 2f,
-                e.y + enemySize / 2f
-            )
-            canvas.drawBitmap(enemyDroneSprite, srcRect, dstRect, spritePaint)
-
-            if (flipHorizontal) {
-                canvas.restore()
+                if (flipHorizontal) {
+                    canvas.restore()
+                }
             }
         }
 

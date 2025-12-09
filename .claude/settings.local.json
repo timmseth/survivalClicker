@@ -5,7 +5,12 @@
       "Bash(git push:*)",
       "Bash(find:*)",
       "Bash(git add:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(magick identify:*)",
+      "Bash(python -c:*)",
+      "Bash(for f in enamies*.png)",
+      "Bash(do mv \"$f\" \"$f/enamies/enemies\")",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []
