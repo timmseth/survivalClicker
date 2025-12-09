@@ -584,15 +584,43 @@ class GameView(context: Context) : View(context) {
         walls.clear()
         val wallCount = 3 + rnd.nextInt(4)  // 3-6 walls
         for (i in 0 until wallCount) {
-            // Random size and position near player but not too close
-            val wallWidth = 50f + rnd.nextFloat() * 100f  // 50-150px wide
-            val wallHeight = 20f  // Short walls
+            // Random orientation: 50% horizontal, 50% vertical
+            val isHorizontal = rnd.nextBoolean()
+            val wallWidth = if (isHorizontal) {
+                50f + rnd.nextFloat() * 100f  // Horizontal: 50-150px wide
+            } else {
+                20f  // Vertical: 20px wide
+            }
+            val wallHeight = if (isHorizontal) {
+                20f  // Horizontal: 20px tall
+            } else {
+                50f + rnd.nextFloat() * 100f  // Vertical: 50-150px tall
+            }
 
-            // Spawn in area around player (within screen bounds)
-            val wx = playerX - width/3f + rnd.nextFloat() * (width * 2f/3f)
-            val wy = playerY - height/3f + rnd.nextFloat() * (height * 2f/3f)
+            // Try to spawn wall away from player (max 10 attempts)
+            var wx = 0f
+            var wy = 0f
+            var attempts = 0
+            val minDistFromPlayer = 150f  // Minimum distance from player
 
-            walls.add(Wall(wx, wy, wallWidth, wallHeight))
+            do {
+                wx = playerX - width/3f + rnd.nextFloat() * (width * 2f/3f)
+                wy = playerY - height/3f + rnd.nextFloat() * (height * 2f/3f)
+
+                // Check if wall center is far enough from player
+                val wallCenterX = wx + wallWidth / 2f
+                val wallCenterY = wy + wallHeight / 2f
+                val distToPlayer = sqrt((wallCenterX - playerX) * (wallCenterX - playerX) +
+                                       (wallCenterY - playerY) * (wallCenterY - playerY))
+
+                if (distToPlayer >= minDistFromPlayer) break
+                attempts++
+            } while (attempts < 10)
+
+            // Only add wall if we found a valid position
+            if (attempts < 10) {
+                walls.add(Wall(wx, wy, wallWidth, wallHeight))
+            }
         }
 
         if (playerHp <= 0) {
@@ -1477,8 +1505,18 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val x = event.getX(index)
                 val y = event.getY(index)
-                // Floating joystick: appears anywhere on screen
-                if (joyPointerId == -1) {
+
+                // Don't activate joystick if touching UI buttons
+                val touchingUI = !inGacha && !isDying && !inDeathScreen && (
+                    damageButtonRect.contains(x, y) ||
+                    fireButtonRect.contains(x, y) ||
+                    speedButtonRect.contains(x, y) ||
+                    hpButtonRect.contains(x, y) ||
+                    settingsIconRect.contains(x, y)
+                )
+
+                // Floating joystick: appears anywhere on screen (except UI buttons)
+                if (joyPointerId == -1 && !touchingUI && !inGacha && !inDeathScreen) {
                     joyPointerId = event.getPointerId(index)
                     joyBaseX = x
                     joyBaseY = y
@@ -1586,47 +1624,30 @@ class GameView(context: Context) : View(context) {
             // Draw glow behind sprite
             canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
 
-            // Sprite sheet: 6 rows × 18 columns
-            // Each frame is 64px wide (4×16px) × 32px tall (2 rows)
-            // Character mapping: 2 rows per character
-            val rowPair = when (e.type) {
-                EnemyType.CIRCLE -> 0  // Rows 0-1
-                EnemyType.TRIANGLE -> 2  // Rows 2-3
-                else -> 4  // Rows 4-5 (SQUARE, PENTAGON, HEXAGON)
+            // Sprite sheet: 144×48 pixels = 9 columns × 3 rows of 16×16px sprites
+            // Row 0: Character 1, Row 1: Character 2, Row 2: Character 3
+            // Each row has 9 frames (3 unique frames repeated)
+            val row = when (e.type) {
+                EnemyType.CIRCLE -> 0
+                EnemyType.TRIANGLE -> 1
+                else -> 2  // SQUARE, PENTAGON, HEXAGON
             }
 
-            // Determine direction for orientation
-            val dx = playerX - e.x
-            val dy = playerY - e.y
-            val absX = abs(dx)
-            val absY = abs(dy)
+            // 3 animation frames cycling (0, 1, 2)
+            val frameCol = e.animFrame % 3
 
-            // For now, use first frame column set (columns 1&2 = indices 0-1)
-            // Animation frames: columns 0-1, 6-7, 12-13 (3 frames)
-            val frameCol = when (e.animFrame % 3) {
-                0 -> 0   // Columns 1&2 (index 0-1)
-                1 -> 6   // Columns 7&8 (index 6-7)
-                else -> 12  // Columns 13&14 (index 12-13)
-            }
-
-            // Each frame is 64px wide (4×16px), 32px tall (2×16px for character)
-            val chunkWidth = 64
-            val chunkHeight = 32
+            // Each sprite is 16×16px
+            val spriteSize = 16
 
             val srcRect = Rect(
-                frameCol * 16,  // Start at column index * 16px
-                rowPair * 16,   // Start at row pair * 16px
-                frameCol * 16 + chunkWidth,  // 64px wide
-                rowPair * 16 + chunkHeight   // 32px tall (2 rows)
+                frameCol * spriteSize,
+                row * spriteSize,
+                (frameCol + 1) * spriteSize,
+                (row + 1) * spriteSize
             )
 
             // Draw sprite (scaled to enemy radius * 2)
             val enemySize = e.radius * 2.5f  // Slightly larger to see details
-
-            if (flipHorizontal) {
-                canvas.save()
-                canvas.scale(-1f, 1f, e.x, e.y)  // Flip horizontally around enemy center
-            }
 
             val dstRect = RectF(
                 e.x - enemySize / 2f,
@@ -1635,10 +1656,6 @@ class GameView(context: Context) : View(context) {
                 e.y + enemySize / 2f
             )
             canvas.drawBitmap(enemyDroneSprite, srcRect, dstRect, spritePaint)
-
-            if (flipHorizontal) {
-                canvas.restore()
-            }
         }
 
         // Draw power-ups (larger and clearer)
