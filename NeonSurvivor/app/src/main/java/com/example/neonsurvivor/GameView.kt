@@ -37,13 +37,17 @@ class GameView(context: Context) : View(context) {
     private var cameraX = 0f
     private var cameraY = 0f
 
-    // Pause menu system
-    private var pauseMenuOpen = false
-    private var pauseMenuTabRect = RectF()
-    private var pauseMenuRect = RectF()
-    private var pauseMenuSlideProgress = 0f  // 0 = closed, 1 = open
+    // Flyout menu system
+    private var currentMenu: String? = null  // null, "SETTINGS", or "UPGRADES"
+    private var menuSlideProgress = 0f  // 0 = closed, 1 = open
+    private var settingsTabRect = RectF()
+    private var upgradesTabRect = RectF()
     private var unpauseCountdown = 0  // 3, 2, 1, 0 (0 = not counting)
     private var unpauseCountdownAlpha = 0f
+
+    // Sprite scaling slider for debugging
+    private var spriteScale = 16f  // Adjustable sprite size
+    private var spriteScaleSliderRect = RectF()
 
     // Settings icon (moved to bottom-left)
     private var settingsIconRect = RectF()
@@ -469,24 +473,28 @@ class GameView(context: Context) : View(context) {
                 h - margin
             )
 
-            // Pause menu tab on right edge (middle of screen)
-            val tabWidth = 50f
-            val tabHeight = 120f
-            pauseMenuTabRect = RectF(
-                w - tabWidth,
-                h / 2f - tabHeight / 2f,
+            // Menu tabs on right edge - square buttons
+            val tabSize = 80f  // Square tabs
+            val tabGap = 20f
+
+            // Settings tab (top)
+            settingsTabRect = RectF(
+                w - tabSize,
+                h / 2f - tabSize - tabGap / 2f,
                 w.toFloat(),
-                h / 2f + tabHeight / 2f
+                h / 2f - tabGap / 2f
             )
 
-            // Pause menu flyout (slides in from right)
-            val menuWidth = w * 0.85f
-            pauseMenuRect = RectF(
-                w.toFloat(),  // Starts off-screen right
-                0f,
-                w + menuWidth,
-                h.toFloat()
+            // Upgrades tab (bottom)
+            upgradesTabRect = RectF(
+                w - tabSize,
+                h / 2f + tabGap / 2f,
+                w.toFloat(),
+                h / 2f + tabSize + tabGap / 2f
             )
+
+            // Sprite scale slider rect (will be positioned in settings menu)
+            spriteScaleSliderRect = RectF(0f, 0f, 0f, 0f)  // Set when menu opens
 
             spawnWave()
 
@@ -664,10 +672,10 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun update(dt: Float) {
-        // Handle pause menu animation
-        val targetSlideProgress = if (pauseMenuOpen) 1f else 0f
-        pauseMenuSlideProgress += (targetSlideProgress - pauseMenuSlideProgress) * 10f * dt
-        pauseMenuSlideProgress = pauseMenuSlideProgress.coerceIn(0f, 1f)
+        // Handle menu slide animation
+        val targetSlideProgress = if (currentMenu != null) 1f else 0f
+        menuSlideProgress += (targetSlideProgress - menuSlideProgress) * 10f * dt
+        menuSlideProgress = menuSlideProgress.coerceIn(0f, 1f)
 
         // Handle unpause countdown
         if (unpauseCountdown > 0) {
@@ -710,7 +718,7 @@ class GameView(context: Context) : View(context) {
         }
 
         // Pause game when menu is open or countdown is running
-        if (pauseMenuOpen || unpauseCountdown > 0) {
+        if (currentMenu != null || unpauseCountdown > 0) {
             return
         }
 
@@ -1479,24 +1487,39 @@ class GameView(context: Context) : View(context) {
         val action = event.actionMasked
         val index = event.actionIndex
 
-        // Handle pause menu touches
+        // Handle menu touches
         if (action == MotionEvent.ACTION_UP) {
             val x = event.getX(index)
             val y = event.getY(index)
 
-            // Check pause menu tab (always visible)
-            if (!inGacha && !isDying && !inDeathScreen && pauseMenuTabRect.contains(x, y)) {
-                pauseMenuOpen = !pauseMenuOpen
-                if (!pauseMenuOpen) {
-                    // Starting unpause countdown
+            // Check Settings tab (always visible)
+            if (!inGacha && !isDying && !inDeathScreen && settingsTabRect.contains(x, y)) {
+                if (currentMenu == "SETTINGS") {
+                    // Close menu and start countdown
+                    currentMenu = null
                     unpauseCountdown = 3
                     unpauseCountdownAlpha = 1f
+                } else {
+                    currentMenu = "SETTINGS"
                 }
                 return true
             }
 
-            // Check clicker upgrade buttons inside pause menu
-            if (pauseMenuOpen && !inGacha && !isDying && !inDeathScreen) {
+            // Check Upgrades tab (always visible)
+            if (!inGacha && !isDying && !inDeathScreen && upgradesTabRect.contains(x, y)) {
+                if (currentMenu == "UPGRADES") {
+                    // Close menu and start countdown
+                    currentMenu = null
+                    unpauseCountdown = 3
+                    unpauseCountdownAlpha = 1f
+                } else {
+                    currentMenu = "UPGRADES"
+                }
+                return true
+            }
+
+            // Check clicker upgrade buttons inside Upgrades menu
+            if (currentMenu == "UPGRADES" && !inGacha && !isDying && !inDeathScreen) {
                 val cost = 10
                 when {
                     damageButtonRect.contains(x, y) && orbCurrency >= cost -> {
@@ -1529,7 +1552,7 @@ class GameView(context: Context) : View(context) {
 
             // Check settings icon tap (opens Settings activity)
             if (!inGacha && settingsIconRect.contains(x, y)) {
-                pauseMenuOpen = false  // Close pause menu
+                currentMenu = null  // Close menu
                 isPaused = true
                 val intent = Intent(context, SettingsActivity::class.java)
                 (context as Activity).startActivity(intent)
@@ -1572,11 +1595,12 @@ class GameView(context: Context) : View(context) {
                 val x = event.getX(index)
                 val y = event.getY(index)
 
-                // Don't activate joystick if touching UI buttons or pause menu
+                // Don't activate joystick if touching UI buttons or menus
                 val touchingUI = !inGacha && !isDying && !inDeathScreen && (
-                    pauseMenuTabRect.contains(x, y) ||
+                    settingsTabRect.contains(x, y) ||
+                    upgradesTabRect.contains(x, y) ||
                     settingsIconRect.contains(x, y) ||
-                    (pauseMenuOpen && (
+                    (currentMenu == "UPGRADES" && (
                         damageButtonRect.contains(x, y) ||
                         fireButtonRect.contains(x, y) ||
                         speedButtonRect.contains(x, y) ||
@@ -1596,13 +1620,27 @@ class GameView(context: Context) : View(context) {
             }
 
             MotionEvent.ACTION_MOVE -> {
+                val x = event.getX(0)  // Use first pointer for slider
+                val y = event.getY(0)
+
+                // Handle sprite scale slider dragging
+                if (currentMenu == "SETTINGS" && spriteScaleSliderRect.contains(x, y)) {
+                    val minScale = 1f
+                    val maxScale = 128f
+                    val sliderWidth = spriteScaleSliderRect.width()
+                    val sliderLeft = spriteScaleSliderRect.left
+                    val normalizedX = ((x - sliderLeft) / sliderWidth).coerceIn(0f, 1f)
+                    spriteScale = minScale + normalizedX * (maxScale - minScale)
+                    return true
+                }
+
                 if (joyPointerId != -1) {
                     val pIndex = event.findPointerIndex(joyPointerId)
                     if (pIndex != -1) {
-                        val x = event.getX(pIndex)
-                        val y = event.getY(pIndex)
-                        joyDx = x - joyBaseX
-                        joyDy = y - joyBaseY
+                        val jx = event.getX(pIndex)
+                        val jy = event.getY(pIndex)
+                        joyDx = jx - joyBaseX
+                        joyDy = jy - joyBaseY
                         val len = hypot(joyDx.toDouble(), joyDy.toDouble()).toFloat()
                         if (len > joyBaseRadius) {
                             val scale = joyBaseRadius / len
@@ -1716,18 +1754,18 @@ class GameView(context: Context) : View(context) {
             val animIndex = e.animFrame % 3
             val frameCol = baseCol + (animIndex * 3)
 
-            // Each sprite is 16×16px (144÷9=16, 48÷3=16)
-            val spriteSize = 16
+            // Use adjustable sprite scale from Settings menu slider
+            val spriteSizeInt = spriteScale.toInt()
 
             val srcRect = Rect(
-                frameCol * spriteSize,
-                row * spriteSize,
-                (frameCol + 1) * spriteSize,
-                (row + 1) * spriteSize
+                frameCol * spriteSizeInt,
+                row * spriteSizeInt,
+                (frameCol + 1) * spriteSizeInt,
+                (row + 1) * spriteSizeInt
             )
 
             // Draw sprite (make it big enough to see clearly)
-            val enemySize = 60f  // Fixed size - large enough to see 16×16px sprite clearly
+            val enemySize = 60f  // Fixed size - large enough to see sprite clearly
 
             // Draw glow BEHIND sprite (smaller than sprite)
             val glowRadius = e.getGlowRadius()
@@ -1856,10 +1894,10 @@ class GameView(context: Context) : View(context) {
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
         canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
 
-        // Draw flyout pause menu (slides in from right)
-        if (pauseMenuSlideProgress > 0.01f) {
+        // Draw flyout menus (slides in from right)
+        if (menuSlideProgress > 0.01f) {
             val menuWidth = w * 0.85f
-            val menuLeft = w - (menuWidth * pauseMenuSlideProgress)
+            val menuLeft = w - (menuWidth * menuSlideProgress)
 
             val menuBgPaint = Paint().apply {
                 color = Color.argb(240, 10, 10, 25)
@@ -1868,7 +1906,6 @@ class GameView(context: Context) : View(context) {
 
             canvas.drawRect(menuLeft, 0f, w, h, menuBgPaint)
 
-            // Draw clicker UI inside pause menu
             val menuTitlePaint = Paint().apply {
                 color = Color.CYAN
                 textSize = 56f
@@ -1877,104 +1914,175 @@ class GameView(context: Context) : View(context) {
                 isAntiAlias = true
                 setShadowLayer(8f, 2f, 2f, Color.BLACK)
             }
-            canvas.drawText("UPGRADES", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
 
-            // Currency display with "Spend!" CTA
-            val currencyBigPaint = Paint().apply {
-                color = Color.argb(255, 0, 255, 100) // Green
-                textSize = 48f
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                isAntiAlias = true
+            // Draw appropriate menu based on currentMenu
+            when (currentMenu) {
+                "SETTINGS" -> {
+                    // Settings menu
+                    canvas.drawText("SETTINGS", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
+
+                    // Sprite Scale Slider
+                    val labelPaint = Paint().apply {
+                        color = Color.WHITE
+                        textSize = 32f
+                        textAlign = Paint.Align.LEFT
+                        isAntiAlias = true
+                    }
+                    val valuePaint = Paint().apply {
+                        color = Color.GREEN
+                        textSize = 48f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+
+                    canvas.drawText("Sprite Scale (for debugging)", menuLeft + 40f, 190f, labelPaint)
+                    canvas.drawText(spriteScale.toInt().toString(), menuLeft + menuWidth / 2f, 250f, valuePaint)
+
+                    // Slider track
+                    val sliderY = 300f
+                    val sliderWidth = menuWidth * 0.85f
+                    val sliderLeft = menuLeft + (menuWidth - sliderWidth) / 2f
+                    val trackPaint = Paint().apply {
+                        color = Color.DKGRAY
+                        style = Paint.Style.FILL
+                    }
+                    canvas.drawRoundRect(
+                        sliderLeft, sliderY - 5f,
+                        sliderLeft + sliderWidth, sliderY + 5f,
+                        5f, 5f, trackPaint
+                    )
+
+                    // Slider thumb
+                    val minScale = 1f
+                    val maxScale = 128f
+                    val thumbX = sliderLeft + ((spriteScale - minScale) / (maxScale - minScale)) * sliderWidth
+                    val thumbPaint = Paint().apply {
+                        color = Color.CYAN
+                        style = Paint.Style.FILL
+                    }
+                    canvas.drawCircle(thumbX, sliderY, 20f, thumbPaint)
+
+                    // Save slider rect for touch handling
+                    spriteScaleSliderRect = RectF(sliderLeft, sliderY - 30f, sliderLeft + sliderWidth, sliderY + 30f)
+
+                    // Instructions
+                    val instructionPaint = Paint().apply {
+                        color = Color.argb(200, 255, 255, 255)
+                        textSize = 24f
+                        textAlign = Paint.Align.LEFT
+                        isAntiAlias = true
+                    }
+                    canvas.drawText("Drag slider to adjust enemy sprite size.", menuLeft + 40f, 370f, instructionPaint)
+                    canvas.drawText("Find the correct value and report it!", menuLeft + 40f, 400f, instructionPaint)
+                }
+                "UPGRADES" -> {
+                    // Upgrades menu (existing clicker UI)
+                    canvas.drawText("UPGRADES", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
+
+                    // Currency display with "Spend!" CTA
+                    val currencyBigPaint = Paint().apply {
+                        color = Color.argb(255, 0, 255, 100) // Green
+                        textSize = 48f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    val spendCtaPaint = Paint().apply {
+                        color = Color.YELLOW
+                        textSize = 32f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    canvas.drawText("$orbCurrency Orbs", menuLeft + menuWidth / 2f, 170f, currencyBigPaint)
+                    canvas.drawText("SPEND!", menuLeft + menuWidth / 2f, 210f, spendCtaPaint)
+
+                    // Button paints - black background with green text
+                    val buttonBgPaint = Paint().apply {
+                        color = Color.BLACK
+                        isAntiAlias = true
+                    }
+                    val buttonShadowPaint = Paint().apply {
+                        color = Color.argb(150, 0, 0, 0)
+                        isAntiAlias = true
+                    }
+                    val buttonBorderPaint = Paint().apply {
+                        color = Color.GREEN
+                        style = Paint.Style.STROKE
+                        strokeWidth = 5f
+                        isAntiAlias = true
+                    }
+                    val buttonLabelPaint = Paint().apply {
+                        color = Color.GREEN
+                        textSize = 42f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    val buttonDetailPaint = Paint().apply {
+                        color = Color.argb(200, 0, 255, 0) // Lighter green
+                        textSize = 28f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+                        isAntiAlias = true
+                    }
+
+                    // Upgrade buttons (vertically stacked in menu) - with padding
+                    val buttonPadding = 30f  // Padding from edges
+                    val buttonWidth = menuWidth - (buttonPadding * 2)
+                    val buttonHeight = 100f
+                    val buttonGap = 24f
+                    val buttonStartX = menuLeft + buttonPadding
+                    var buttonY = 260f
+
+                    // Helper function to draw button
+                    fun drawButton(rect: RectF, label: String, level: Int, cost: Int) {
+                        // Shadow (offset down and right)
+                        val shadowRect = RectF(rect.left + 4f, rect.top + 4f, rect.right + 4f, rect.bottom + 4f)
+                        canvas.drawRoundRect(shadowRect, 12f, 12f, buttonShadowPaint)
+
+                        // Black background
+                        canvas.drawRoundRect(rect, 12f, 12f, buttonBgPaint)
+
+                        // Green outline
+                        canvas.drawRoundRect(rect, 12f, 12f, buttonBorderPaint)
+
+                        // Green text
+                        canvas.drawText(label, rect.centerX(), rect.centerY() - 20f, buttonLabelPaint)
+                        canvas.drawText("Level $level", rect.centerX(), rect.centerY() + 10f, buttonDetailPaint)
+                        canvas.drawText("Cost: $cost orbs", rect.centerX(), rect.centerY() + 35f, buttonDetailPaint)
+                    }
+
+                    // Button 1: Damage
+                    damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
+                    buttonY += buttonHeight + buttonGap
+
+                    // Button 2: Fire Rate
+                    fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
+                    buttonY += buttonHeight + buttonGap
+
+                    // Button 3: Speed
+                    speedButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(speedButtonRect, "SPEED+", clickerSpeedLevel, 10)
+                    buttonY += buttonHeight + buttonGap
+
+                    // Button 4: HP
+                    hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
+                }
             }
-            val spendCtaPaint = Paint().apply {
-                color = Color.YELLOW
-                textSize = 32f
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                isAntiAlias = true
-            }
-            canvas.drawText("$orbCurrency Orbs", menuLeft + menuWidth / 2f, 170f, currencyBigPaint)
-            canvas.drawText("SPEND!", menuLeft + menuWidth / 2f, 210f, spendCtaPaint)
-
-            // Button paints - black background with green text
-            val buttonBgPaint = Paint().apply {
-                color = Color.BLACK
-                isAntiAlias = true
-            }
-            val buttonShadowPaint = Paint().apply {
-                color = Color.argb(150, 0, 0, 0)
-                isAntiAlias = true
-            }
-            val buttonBorderPaint = Paint().apply {
-                color = Color.GREEN
-                style = Paint.Style.STROKE
-                strokeWidth = 5f
-                isAntiAlias = true
-            }
-            val buttonLabelPaint = Paint().apply {
-                color = Color.GREEN
-                textSize = 42f
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                isAntiAlias = true
-            }
-            val buttonDetailPaint = Paint().apply {
-                color = Color.argb(200, 0, 255, 0) // Lighter green
-                textSize = 28f
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-                isAntiAlias = true
-            }
-
-            // Upgrade buttons (vertically stacked in menu) - larger and 3D
-            val buttonWidth = menuWidth * 0.85f
-            val buttonHeight = 100f
-            val buttonGap = 24f
-            val buttonStartX = menuLeft + (menuWidth - buttonWidth) / 2f
-            var buttonY = 260f
-
-            // Helper function to draw button
-            fun drawButton(rect: RectF, label: String, level: Int, cost: Int) {
-                // Shadow (offset down and right)
-                val shadowRect = RectF(rect.left + 4f, rect.top + 4f, rect.right + 4f, rect.bottom + 4f)
-                canvas.drawRoundRect(shadowRect, 12f, 12f, buttonShadowPaint)
-
-                // Black background
-                canvas.drawRoundRect(rect, 12f, 12f, buttonBgPaint)
-
-                // Green outline
-                canvas.drawRoundRect(rect, 12f, 12f, buttonBorderPaint)
-
-                // Green text
-                canvas.drawText(label, rect.centerX(), rect.centerY() - 20f, buttonLabelPaint)
-                canvas.drawText("Level $level", rect.centerX(), rect.centerY() + 10f, buttonDetailPaint)
-                canvas.drawText("Cost: $cost orbs", rect.centerX(), rect.centerY() + 35f, buttonDetailPaint)
-            }
-
-            // Button 1: Damage
-            damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
-            buttonY += buttonHeight + buttonGap
-
-            // Button 2: Fire Rate
-            fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            drawButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
-            buttonY += buttonHeight + buttonGap
-
-            // Button 3: Speed
-            speedButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            drawButton(speedButtonRect, "SPEED+", clickerSpeedLevel, 10)
-            buttonY += buttonHeight + buttonGap
-
-            // Button 4: HP
-            hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
         }
 
-        // Draw pause menu tab on top of everything (bigger, always visible)
+        // Draw menu tabs on top of everything (always visible)
         val tabPaint = Paint().apply {
             color = Color.argb(255, 0, 180, 180) // Solid bright cyan
+            isAntiAlias = true
+        }
+        val tabActivePaint = Paint().apply {
+            color = Color.argb(255, 0, 255, 100) // Bright green for active tab
             isAntiAlias = true
         }
         val tabShadowPaint = Paint().apply {
@@ -1983,39 +2091,52 @@ class GameView(context: Context) : View(context) {
         }
         val tabTextPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 48f
+            textSize = 32f
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
             setShadowLayer(6f, 2f, 2f, Color.BLACK)
         }
-
-        // Shadow
-        val shadowTabRect = RectF(
-            pauseMenuTabRect.left + 4f,
-            pauseMenuTabRect.top + 4f,
-            pauseMenuTabRect.right + 4f,
-            pauseMenuTabRect.bottom + 4f
-        )
-        canvas.drawRoundRect(shadowTabRect, 20f, 20f, tabShadowPaint)
-
-        // Main tab
-        canvas.drawRoundRect(pauseMenuTabRect, 20f, 20f, tabPaint)
-
-        // Border
         val tabBorderPaint = Paint().apply {
             color = Color.CYAN
             style = Paint.Style.STROKE
             strokeWidth = 4f
             isAntiAlias = true
         }
-        canvas.drawRoundRect(pauseMenuTabRect, 20f, 20f, tabBorderPaint)
 
-        // Rotated text
-        canvas.save()
-        canvas.rotate(90f, pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY())
-        canvas.drawText("MENU", pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY() + 16f, tabTextPaint)
-        canvas.restore()
+        // Settings tab (top) - square button
+        val settingsShadowRect = RectF(
+            settingsTabRect.left + 4f,
+            settingsTabRect.top + 4f,
+            settingsTabRect.right + 4f,
+            settingsTabRect.bottom + 4f
+        )
+        canvas.drawRect(settingsShadowRect, tabShadowPaint)
+        canvas.drawRect(
+            settingsTabRect,
+            if (currentMenu == "SETTINGS") tabActivePaint else tabPaint
+        )
+        canvas.drawRect(settingsTabRect, tabBorderPaint)
+
+        // "S" icon for Settings tab
+        canvas.drawText("S", settingsTabRect.centerX(), settingsTabRect.centerY() + 16f, tabTextPaint)
+
+        // Upgrades tab (bottom) - square button
+        val upgradesShadowRect = RectF(
+            upgradesTabRect.left + 4f,
+            upgradesTabRect.top + 4f,
+            upgradesTabRect.right + 4f,
+            upgradesTabRect.bottom + 4f
+        )
+        canvas.drawRect(upgradesShadowRect, tabShadowPaint)
+        canvas.drawRect(
+            upgradesTabRect,
+            if (currentMenu == "UPGRADES") tabActivePaint else tabPaint
+        )
+        canvas.drawRect(upgradesTabRect, tabBorderPaint)
+
+        // "U" icon for Upgrades tab
+        canvas.drawText("U", upgradesTabRect.centerX(), upgradesTabRect.centerY() + 16f, tabTextPaint)
 
         // Settings icon in bottom-left (gear icon)
         canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 35f, pauseBgPaint)
