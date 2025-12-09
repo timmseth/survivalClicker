@@ -1703,19 +1703,20 @@ class GameView(context: Context) : View(context) {
             val absY = abs(dy)
 
             // Select base column for direction
+            // Each direction uses 3 consecutive columns
             val (baseCol, flipHorizontal) = when {
-                absY > absX && dy > 0 -> Pair(0, false)  // Down: cols 0,3,6
-                absY > absX && dy < 0 -> Pair(2, false)  // Up: cols 2,5,8
-                absX >= absY && dx < 0 -> Pair(1, false) // Left: cols 1,4,7
-                else -> Pair(1, true)  // Right: flip left sprite
+                absY > absX && dy > 0 -> Pair(0, false)  // Down: cols 0,1,2
+                absY > absX && dy < 0 -> Pair(6, false)  // Up: cols 6,7,8
+                absX >= absY && dx < 0 -> Pair(3, false) // Left: cols 3,4,5
+                else -> Pair(3, true)  // Right: flip left sprite (cols 3,4,5)
             }
 
-            // 3 animation frames: baseCol, baseCol+3, baseCol+6
+            // 3 animation frames: baseCol+0, baseCol+1, baseCol+2
             val animIndex = e.animFrame % 3
-            val frameCol = baseCol + (animIndex * 3)
+            val frameCol = baseCol + animIndex
 
-            // Each sprite is 64px (works with current sprite sheet)
-            val spriteSize = 64
+            // Each sprite is 16×16px (144÷9=16, 48÷3=16)
+            val spriteSize = 16
 
             val srcRect = Rect(
                 frameCol * spriteSize,
