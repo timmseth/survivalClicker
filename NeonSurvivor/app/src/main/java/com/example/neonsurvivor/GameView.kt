@@ -1854,24 +1854,6 @@ class GameView(context: Context) : View(context) {
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
         canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
 
-        // Draw pause menu tab on right edge (always visible)
-        val tabPaint = Paint().apply {
-            color = Color.argb(220, 20, 20, 40)
-            isAntiAlias = true
-        }
-        val tabTextPaint = Paint().apply {
-            color = Color.CYAN
-            textSize = 36f
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }
-        canvas.drawRoundRect(pauseMenuTabRect, 15f, 15f, tabPaint)
-        canvas.save()
-        canvas.rotate(90f, pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY())
-        canvas.drawText("MENU", pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY() + 12f, tabTextPaint)
-        canvas.restore()
-
         // Draw flyout pause menu (slides in from right)
         if (pauseMenuSlideProgress > 0.01f) {
             val menuWidth = w * 0.85f
@@ -1887,62 +1869,158 @@ class GameView(context: Context) : View(context) {
             // Draw clicker UI inside pause menu
             val menuTitlePaint = Paint().apply {
                 color = Color.CYAN
+                textSize = 56f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                setShadowLayer(8f, 2f, 2f, Color.BLACK)
+            }
+            canvas.drawText("UPGRADES", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
+
+            // Currency display with "Spend!" CTA
+            val currencyBigPaint = Paint().apply {
+                color = Color.argb(255, 0, 255, 100) // Green
                 textSize = 48f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
             }
-            canvas.drawText("UPGRADES", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
+            val spendCtaPaint = Paint().apply {
+                color = Color.YELLOW
+                textSize = 32f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("$orbCurrency Orbs", menuLeft + menuWidth / 2f, 170f, currencyBigPaint)
+            canvas.drawText("SPEND!", menuLeft + menuWidth / 2f, 210f, spendCtaPaint)
 
-            // Currency display
-            val currencyText = "Orbs: $orbCurrency"
-            canvas.drawText(currencyText, menuLeft + menuWidth / 2f, 180f, currencyPaint)
+            // 3D Button paints
+            val button3DTopPaint = Paint().apply {
+                color = Color.argb(255, 0, 200, 200) // Bright cyan top
+                isAntiAlias = true
+            }
+            val button3DBottomPaint = Paint().apply {
+                color = Color.argb(255, 0, 100, 100) // Dark cyan bottom
+                isAntiAlias = true
+            }
+            val button3DBorderPaint = Paint().apply {
+                color = Color.CYAN
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+                isAntiAlias = true
+            }
+            val buttonLabelPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 42f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                setShadowLayer(4f, 1f, 1f, Color.BLACK)
+            }
+            val buttonDetailPaint = Paint().apply {
+                color = Color.argb(200, 200, 200, 200)
+                textSize = 28f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+                isAntiAlias = true
+            }
 
-            // Upgrade buttons (vertically stacked in menu)
-            val buttonWidth = menuWidth * 0.8f
-            val buttonHeight = 80f
-            val buttonGap = 20f
+            // Upgrade buttons (vertically stacked in menu) - larger and 3D
+            val buttonWidth = menuWidth * 0.85f
+            val buttonHeight = 100f
+            val buttonGap = 24f
             val buttonStartX = menuLeft + (menuWidth - buttonWidth) / 2f
-            var buttonY = 240f
+            var buttonY = 260f
+
+            // Helper function to draw 3D button
+            fun draw3DButton(rect: RectF, label: String, level: Int, cost: Int) {
+                // Bottom shadow (offset down and right)
+                val shadowRect = RectF(rect.left + 6f, rect.top + 6f, rect.right + 6f, rect.bottom + 6f)
+                canvas.drawRoundRect(shadowRect, 12f, 12f, button3DBottomPaint)
+
+                // Main button
+                canvas.drawRoundRect(rect, 12f, 12f, button3DTopPaint)
+                canvas.drawRoundRect(rect, 12f, 12f, button3DBorderPaint)
+
+                // Inner highlight
+                val highlightRect = RectF(rect.left + 8f, rect.top + 8f, rect.right - 8f, rect.top + 30f)
+                val highlightPaint = Paint().apply {
+                    color = Color.argb(80, 255, 255, 255)
+                    isAntiAlias = true
+                }
+                canvas.drawRoundRect(highlightRect, 8f, 8f, highlightPaint)
+
+                // Text
+                canvas.drawText(label, rect.centerX(), rect.centerY() - 20f, buttonLabelPaint)
+                canvas.drawText("Level $level", rect.centerX(), rect.centerY() + 10f, buttonDetailPaint)
+                canvas.drawText("Cost: $cost orbs", rect.centerX(), rect.centerY() + 35f, buttonDetailPaint)
+            }
 
             // Button 1: Damage
             damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            canvas.drawRoundRect(damageButtonRect, 10f, 10f, buttonBgPaint)
-            canvas.drawRoundRect(damageButtonRect, 10f, 10f, buttonBorderPaint)
-            canvas.drawText("DMG+", damageButtonRect.centerX(), damageButtonRect.centerY() - 15f, buttonTextPaint)
-            canvas.drawText("Level: $clickerDamageLevel", damageButtonRect.centerX(), damageButtonRect.centerY() + 5f, buttonTextPaint)
-            canvas.drawText("Cost: 10 orbs", damageButtonRect.centerX(), damageButtonRect.centerY() + 25f, buttonTextPaint)
-
+            draw3DButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
             buttonY += buttonHeight + buttonGap
 
             // Button 2: Fire Rate
             fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            canvas.drawRoundRect(fireButtonRect, 10f, 10f, buttonBgPaint)
-            canvas.drawRoundRect(fireButtonRect, 10f, 10f, buttonBorderPaint)
-            canvas.drawText("FIRE+", fireButtonRect.centerX(), fireButtonRect.centerY() - 15f, buttonTextPaint)
-            canvas.drawText("Level: $clickerFireRateLevel", fireButtonRect.centerX(), fireButtonRect.centerY() + 5f, buttonTextPaint)
-            canvas.drawText("Cost: 10 orbs", fireButtonRect.centerX(), fireButtonRect.centerY() + 25f, buttonTextPaint)
-
+            draw3DButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
             buttonY += buttonHeight + buttonGap
 
             // Button 3: Speed
             speedButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            canvas.drawRoundRect(speedButtonRect, 10f, 10f, buttonBgPaint)
-            canvas.drawRoundRect(speedButtonRect, 10f, 10f, buttonBorderPaint)
-            canvas.drawText("SPD+", speedButtonRect.centerX(), speedButtonRect.centerY() - 15f, buttonTextPaint)
-            canvas.drawText("Level: $clickerSpeedLevel", speedButtonRect.centerX(), speedButtonRect.centerY() + 5f, buttonTextPaint)
-            canvas.drawText("Cost: 10 orbs", speedButtonRect.centerX(), speedButtonRect.centerY() + 25f, buttonTextPaint)
-
+            draw3DButton(speedButtonRect, "SPEED+", clickerSpeedLevel, 10)
             buttonY += buttonHeight + buttonGap
 
             // Button 4: HP
             hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            canvas.drawRoundRect(hpButtonRect, 10f, 10f, buttonBgPaint)
-            canvas.drawRoundRect(hpButtonRect, 10f, 10f, buttonBorderPaint)
-            canvas.drawText("HP+", hpButtonRect.centerX(), hpButtonRect.centerY() - 15f, buttonTextPaint)
-            canvas.drawText("Level: $clickerHpLevel", hpButtonRect.centerX(), hpButtonRect.centerY() + 5f, buttonTextPaint)
-            canvas.drawText("Cost: 10 orbs", hpButtonRect.centerX(), hpButtonRect.centerY() + 25f, buttonTextPaint)
+            draw3DButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
         }
+
+        // Draw pause menu tab on top of everything (bigger, always visible)
+        val tabPaint = Paint().apply {
+            color = Color.argb(255, 0, 180, 180) // Solid bright cyan
+            isAntiAlias = true
+        }
+        val tabShadowPaint = Paint().apply {
+            color = Color.argb(200, 0, 0, 0)
+            isAntiAlias = true
+        }
+        val tabTextPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 48f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(6f, 2f, 2f, Color.BLACK)
+        }
+
+        // Shadow
+        val shadowTabRect = RectF(
+            pauseMenuTabRect.left + 4f,
+            pauseMenuTabRect.top + 4f,
+            pauseMenuTabRect.right + 4f,
+            pauseMenuTabRect.bottom + 4f
+        )
+        canvas.drawRoundRect(shadowTabRect, 20f, 20f, tabShadowPaint)
+
+        // Main tab
+        canvas.drawRoundRect(pauseMenuTabRect, 20f, 20f, tabPaint)
+
+        // Border
+        val tabBorderPaint = Paint().apply {
+            color = Color.CYAN
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(pauseMenuTabRect, 20f, 20f, tabBorderPaint)
+
+        // Rotated text
+        canvas.save()
+        canvas.rotate(90f, pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY())
+        canvas.drawText("MENU", pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY() + 16f, tabTextPaint)
+        canvas.restore()
 
         // Settings icon in bottom-left (gear icon)
         canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 35f, pauseBgPaint)
