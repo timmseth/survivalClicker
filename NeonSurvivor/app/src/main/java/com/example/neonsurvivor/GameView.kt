@@ -2116,8 +2116,14 @@ class GameView(context: Context) : View(context) {
                     saveButtonRect = RectF(menuLeft + padding, yPos, menuLeft + padding + buttonWidth, yPos + buttonHeight)
                     loadButtonRect = RectF(menuLeft + padding * 2 + buttonWidth, yPos, menuLeft + menuWidth - padding, yPos + buttonHeight)
 
+                    val buttonBgPaint = Paint().apply {
+                        color = Color.argb(150, 20, 20, 30)
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+
                     // Save button
-                    canvas.drawRoundRect(saveButtonRect, 15f, 15f, Color.argb(150, 20, 20, 30), Paint())
+                    canvas.drawRoundRect(saveButtonRect, 15f, 15f, buttonBgPaint)
                     canvas.drawRoundRect(saveButtonRect, 15f, 15f, toggleBorderPaint)
                     labelPaint.textAlign = Paint.Align.CENTER
                     canvas.drawText("SAVE", saveButtonRect.centerX(), saveButtonRect.centerY() + 10f, labelPaint)
@@ -2135,7 +2141,7 @@ class GameView(context: Context) : View(context) {
                         textAlign = Paint.Align.CENTER
                         isAntiAlias = true
                     }
-                    canvas.drawRoundRect(loadButtonRect, 15f, 15f, Color.argb(150, 20, 20, 30), Paint())
+                    canvas.drawRoundRect(loadButtonRect, 15f, 15f, buttonBgPaint)
                     canvas.drawRoundRect(loadButtonRect, 15f, 15f, loadBorderPaint)
                     canvas.drawText("LOAD", loadButtonRect.centerX(), loadButtonRect.centerY() + 10f, loadTextPaint)
 
