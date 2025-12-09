@@ -489,9 +489,9 @@ class GameView(context: Context) : View(context) {
             playerY = h / 2f
             // Floating joystick - no fixed position, appears where user touches
 
-            // Menu tabs on right edge - square buttons
-            val tabSize = 80f  // Square tabs
-            val tabGap = 20f
+            // Menu tabs on right edge - square buttons (2x bigger for easier tapping)
+            val tabSize = 160f  // Square tabs (was 80f)
+            val tabGap = 40f
 
             // Settings tab (top)
             settingsTabRect = RectF(
@@ -2034,15 +2034,24 @@ class GameView(context: Context) : View(context) {
 
         // Draw UI elements in screen space (not world space)
 
-        // HP bar
+        // HP bar (bigger and easier to see)
         val barWidth = w * 0.6f
-        val barHeight = 24f
+        val barHeight = 36f  // Increased from 24f
         val barX = (w - barWidth) / 2f
-        val barY = 40f
+        val barY = 50f  // Moved down slightly
         canvas.drawRect(barX, barY, barX + barWidth, barY + barHeight, hpBgPaint)
         val hpRatio = (playerHp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f)
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
-        canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
+
+        // Wave counter (bigger text)
+        val waveTextPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 48f  // Increased
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(4f, 2f, 2f, Color.BLACK)
+        }
+        canvas.drawText("Wave $wave", 30f, barY + barHeight + 55f, waveTextPaint)
 
         // Draw flyout menus (slides in from right)
         if (menuSlideProgress > 0.01f) {
@@ -2334,16 +2343,16 @@ class GameView(context: Context) : View(context) {
         }
         val tabTextPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 32f
+            textSize = 56f  // Increased from 32f
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-            setShadowLayer(6f, 2f, 2f, Color.BLACK)
+            setShadowLayer(8f, 3f, 3f, Color.BLACK)
         }
         val tabBorderPaint = Paint().apply {
             color = Color.CYAN
             style = Paint.Style.STROKE
-            strokeWidth = 4f
+            strokeWidth = 6f  // Increased from 4f
             isAntiAlias = true
         }
 
@@ -2361,22 +2370,22 @@ class GameView(context: Context) : View(context) {
         )
         canvas.drawRect(settingsTabRect, tabBorderPaint)
 
-        // Settings gear icon
+        // Settings gear icon (2x bigger)
         val gearIconPaint = Paint().apply {
             color = Color.WHITE
             style = Paint.Style.STROKE
-            strokeWidth = 3f
+            strokeWidth = 6f  // Doubled from 3f
             isAntiAlias = true
         }
         val gearCenterX = settingsTabRect.centerX()
         val gearCenterY = settingsTabRect.centerY()
-        canvas.drawCircle(gearCenterX, gearCenterY, 15f, gearIconPaint)
-        canvas.drawCircle(gearCenterX, gearCenterY, 6f, gearIconPaint)
-        // Gear teeth (4 lines extending from center)
-        canvas.drawLine(gearCenterX - 18f, gearCenterY, gearCenterX - 12f, gearCenterY, gearIconPaint)
-        canvas.drawLine(gearCenterX + 12f, gearCenterY, gearCenterX + 18f, gearCenterY, gearIconPaint)
-        canvas.drawLine(gearCenterX, gearCenterY - 18f, gearCenterX, gearCenterY - 12f, gearIconPaint)
-        canvas.drawLine(gearCenterX, gearCenterY + 12f, gearCenterX, gearCenterY + 18f, gearIconPaint)
+        canvas.drawCircle(gearCenterX, gearCenterY, 30f, gearIconPaint)  // Doubled from 15f
+        canvas.drawCircle(gearCenterX, gearCenterY, 12f, gearIconPaint)  // Doubled from 6f
+        // Gear teeth (4 lines extending from center) - doubled sizes
+        canvas.drawLine(gearCenterX - 36f, gearCenterY, gearCenterX - 24f, gearCenterY, gearIconPaint)
+        canvas.drawLine(gearCenterX + 24f, gearCenterY, gearCenterX + 36f, gearCenterY, gearIconPaint)
+        canvas.drawLine(gearCenterX, gearCenterY - 36f, gearCenterX, gearCenterY - 24f, gearIconPaint)
+        canvas.drawLine(gearCenterX, gearCenterY + 24f, gearCenterX, gearCenterY + 36f, gearIconPaint)
 
         // Upgrades tab (bottom) - square button
         val upgradesShadowRect = RectF(
@@ -2392,23 +2401,23 @@ class GameView(context: Context) : View(context) {
         )
         canvas.drawRect(upgradesTabRect, tabBorderPaint)
 
-        // Dollar sign with orb count
+        // Dollar sign with orb count (2x bigger)
         val dollarPaint = Paint().apply {
             color = Color.GREEN
-            textSize = 36f
+            textSize = 72f  // Doubled from 36f
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
         }
         val orbCountPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 18f
+            textSize = 32f  // Increased from 18f
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
         }
-        canvas.drawText("$", upgradesTabRect.centerX(), upgradesTabRect.centerY() + 2f, dollarPaint)
-        canvas.drawText(orbCurrency.toString(), upgradesTabRect.centerX(), upgradesTabRect.centerY() + 24f, orbCountPaint)
+        canvas.drawText("$", upgradesTabRect.centerX(), upgradesTabRect.centerY() - 10f, dollarPaint)
+        canvas.drawText(orbCurrency.toString(), upgradesTabRect.centerX(), upgradesTabRect.centerY() + 45f, orbCountPaint)
 
         // Joystick in screen space
         if (joyActive) {
