@@ -1895,31 +1895,30 @@ class GameView(context: Context) : View(context) {
             canvas.drawText("$orbCurrency Orbs", menuLeft + menuWidth / 2f, 170f, currencyBigPaint)
             canvas.drawText("SPEND!", menuLeft + menuWidth / 2f, 210f, spendCtaPaint)
 
-            // 3D Button paints
-            val button3DTopPaint = Paint().apply {
-                color = Color.argb(255, 0, 200, 200) // Bright cyan top
+            // Button paints - black background with green text
+            val buttonBgPaint = Paint().apply {
+                color = Color.BLACK
                 isAntiAlias = true
             }
-            val button3DBottomPaint = Paint().apply {
-                color = Color.argb(255, 0, 100, 100) // Dark cyan bottom
+            val buttonShadowPaint = Paint().apply {
+                color = Color.argb(150, 0, 0, 0)
                 isAntiAlias = true
             }
-            val button3DBorderPaint = Paint().apply {
-                color = Color.CYAN
+            val buttonBorderPaint = Paint().apply {
+                color = Color.GREEN
                 style = Paint.Style.STROKE
-                strokeWidth = 4f
+                strokeWidth = 5f
                 isAntiAlias = true
             }
             val buttonLabelPaint = Paint().apply {
-                color = Color.WHITE
+                color = Color.GREEN
                 textSize = 42f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
-                setShadowLayer(4f, 1f, 1f, Color.BLACK)
             }
             val buttonDetailPaint = Paint().apply {
-                color = Color.argb(200, 200, 200, 200)
+                color = Color.argb(200, 0, 255, 0) // Lighter green
                 textSize = 28f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
@@ -1933,25 +1932,19 @@ class GameView(context: Context) : View(context) {
             val buttonStartX = menuLeft + (menuWidth - buttonWidth) / 2f
             var buttonY = 260f
 
-            // Helper function to draw 3D button
-            fun draw3DButton(rect: RectF, label: String, level: Int, cost: Int) {
-                // Bottom shadow (offset down and right)
-                val shadowRect = RectF(rect.left + 6f, rect.top + 6f, rect.right + 6f, rect.bottom + 6f)
-                canvas.drawRoundRect(shadowRect, 12f, 12f, button3DBottomPaint)
+            // Helper function to draw button
+            fun drawButton(rect: RectF, label: String, level: Int, cost: Int) {
+                // Shadow (offset down and right)
+                val shadowRect = RectF(rect.left + 4f, rect.top + 4f, rect.right + 4f, rect.bottom + 4f)
+                canvas.drawRoundRect(shadowRect, 12f, 12f, buttonShadowPaint)
 
-                // Main button
-                canvas.drawRoundRect(rect, 12f, 12f, button3DTopPaint)
-                canvas.drawRoundRect(rect, 12f, 12f, button3DBorderPaint)
+                // Black background
+                canvas.drawRoundRect(rect, 12f, 12f, buttonBgPaint)
 
-                // Inner highlight
-                val highlightRect = RectF(rect.left + 8f, rect.top + 8f, rect.right - 8f, rect.top + 30f)
-                val highlightPaint = Paint().apply {
-                    color = Color.argb(80, 255, 255, 255)
-                    isAntiAlias = true
-                }
-                canvas.drawRoundRect(highlightRect, 8f, 8f, highlightPaint)
+                // Green outline
+                canvas.drawRoundRect(rect, 12f, 12f, buttonBorderPaint)
 
-                // Text
+                // Green text
                 canvas.drawText(label, rect.centerX(), rect.centerY() - 20f, buttonLabelPaint)
                 canvas.drawText("Level $level", rect.centerX(), rect.centerY() + 10f, buttonDetailPaint)
                 canvas.drawText("Cost: $cost orbs", rect.centerX(), rect.centerY() + 35f, buttonDetailPaint)
@@ -1959,22 +1952,22 @@ class GameView(context: Context) : View(context) {
 
             // Button 1: Damage
             damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            draw3DButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
+            drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
             buttonY += buttonHeight + buttonGap
 
             // Button 2: Fire Rate
             fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            draw3DButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
+            drawButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
             buttonY += buttonHeight + buttonGap
 
             // Button 3: Speed
             speedButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            draw3DButton(speedButtonRect, "SPEED+", clickerSpeedLevel, 10)
+            drawButton(speedButtonRect, "SPEED+", clickerSpeedLevel, 10)
             buttonY += buttonHeight + buttonGap
 
             // Button 4: HP
             hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-            draw3DButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
+            drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
         }
 
         // Draw pause menu tab on top of everything (bigger, always visible)
