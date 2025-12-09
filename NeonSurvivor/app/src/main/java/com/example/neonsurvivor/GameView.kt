@@ -46,7 +46,7 @@ class GameView(context: Context) : View(context) {
     private var unpauseCountdownAlpha = 0f
 
     // Sprite scaling slider for debugging
-    private var spriteScale = 16f  // Adjustable sprite size
+    private var spriteScale = 64f  // Adjustable sprite size (64 is correct for chibi-layered.png)
     private var spriteScaleSliderRect = RectF()
 
     // Settings icon (moved to bottom-left)
