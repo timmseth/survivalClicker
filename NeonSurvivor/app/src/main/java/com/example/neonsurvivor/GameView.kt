@@ -1625,16 +1625,30 @@ class GameView(context: Context) : View(context) {
             canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
 
             // Sprite sheet: 144×48 pixels = 9 columns × 3 rows of 16×16px sprites
-            // Row 0: Character 1, Row 1: Character 2, Row 2: Character 3
-            // Each row has 9 frames (3 unique frames repeated)
+            // Each character (row) has: down=cols 0,3,6  left=cols 1,4,7  up=cols 2,5,8
             val row = when (e.type) {
                 EnemyType.CIRCLE -> 0
                 EnemyType.TRIANGLE -> 1
                 else -> 2  // SQUARE, PENTAGON, HEXAGON
             }
 
-            // 3 animation frames cycling (0, 1, 2)
-            val frameCol = e.animFrame % 3
+            // Determine direction based on movement toward player
+            val dx = playerX - e.x
+            val dy = playerY - e.y
+            val absX = abs(dx)
+            val absY = abs(dy)
+
+            // Select base column for direction
+            val (baseCol, flipHorizontal) = when {
+                absY > absX && dy > 0 -> Pair(0, false)  // Down: cols 0,3,6
+                absY > absX && dy < 0 -> Pair(2, false)  // Up: cols 2,5,8
+                absX >= absY && dx < 0 -> Pair(1, false) // Left: cols 1,4,7
+                else -> Pair(1, true)  // Right: flip left sprite
+            }
+
+            // 3 animation frames: baseCol, baseCol+3, baseCol+6
+            val animIndex = e.animFrame % 3
+            val frameCol = baseCol + (animIndex * 3)
 
             // Each sprite is 16×16px
             val spriteSize = 16
@@ -1649,6 +1663,12 @@ class GameView(context: Context) : View(context) {
             // Draw sprite (scaled to enemy radius * 2)
             val enemySize = e.radius * 2.5f  // Slightly larger to see details
 
+            // Flip horizontally if moving right
+            if (flipHorizontal) {
+                canvas.save()
+                canvas.scale(-1f, 1f, e.x, e.y)
+            }
+
             val dstRect = RectF(
                 e.x - enemySize / 2f,
                 e.y - enemySize / 2f,
@@ -1656,6 +1676,10 @@ class GameView(context: Context) : View(context) {
                 e.y + enemySize / 2f
             )
             canvas.drawBitmap(enemyDroneSprite, srcRect, dstRect, spritePaint)
+
+            if (flipHorizontal) {
+                canvas.restore()
+            }
         }
 
         // Draw power-ups (larger and clearer)
