@@ -413,9 +413,22 @@ class GameView(context: Context) : View(context) {
     private var speedButtonRect = RectF()
     private var hpButtonRect = RectF()
 
-    enum class UpgradeType { DAMAGE, FIRE_RATE, SPEED, HP }
-    data class UpgradeOption(val type: UpgradeType, val label: String, val desc: String)
+    enum class UpgradeType {
+        // Special upgrades (wave-end rewards)
+        STASIS_CORE, OVERCLOCKER, QUANTUM_MIRROR, FRAGMENT_DRIVE,
+        CONVERT_TO_ORBS, CONVERT_TO_BULLETS, CONVERT_TO_HOMING,
+        // Basic stat upgrades removed from wave-end (moved to orb shop only)
+    }
+
+    data class UpgradeOption(val type: UpgradeType, val label: String, val desc: String, val weight: Int = 100)
     private val upgradeOptions = mutableListOf<UpgradeOption>()
+
+    // Active special upgrade effects
+    private var hasStasisCore = false
+    private var hasQuantumMirror = false
+    private var hasFragmentDrive = false
+    private var overclockTimer = 0f
+    private var overclockActive = false
 
     init {
         isFocusable = true
@@ -1416,39 +1429,59 @@ class GameView(context: Context) : View(context) {
         joyDy = 0f
 
         upgradeOptions.clear()
-        val allTypes = UpgradeType.values().toMutableList()
-        allTypes.shuffle()
-        val chosen = allTypes.take(3)
-        for (t in chosen) {
-            when (t) {
-                UpgradeType.DAMAGE ->
-                    upgradeOptions.add(
-                        UpgradeOption(t, "Damage +12%", "Bullets hit harder.")
-                    )
-                UpgradeType.FIRE_RATE ->
-                    upgradeOptions.add(
-                        UpgradeOption(t, "Fire Rate +12%", "Shoot more often.")
-                    )
-                UpgradeType.SPEED ->
-                    upgradeOptions.add(
-                        UpgradeOption(t, "Speed +10%", "Move faster.")
-                    )
-                UpgradeType.HP ->
-                    upgradeOptions.add(
-                        UpgradeOption(t, "HP Boost", "Max HP +8 and heal.")
-                    )
+
+        // Weighted randomized drop table
+        val dropTable = listOf(
+            UpgradeOption(UpgradeType.STASIS_CORE, "Stasis Core", "Player bullets slow enemy bullets", weight = 100),
+            UpgradeOption(UpgradeType.OVERCLOCKER, "Overclocker", "2x fire rate for 5 seconds", weight = 120),
+            UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Quantum Mirror", "Reflects bullets that graze you", weight = 80),
+            UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", "Kills spawn 4 micro-projectiles", weight = 100),
+            UpgradeOption(UpgradeType.CONVERT_TO_ORBS, "Orb Converter", "Convert all bullets to orbs", weight = 90),
+            UpgradeOption(UpgradeType.CONVERT_TO_BULLETS, "Bullet Converter", "Convert all bullets to player bullets", weight = 110),
+            UpgradeOption(UpgradeType.CONVERT_TO_HOMING, "Homing Converter", "Convert all bullets to homing shards", weight = 85)
+        )
+
+        // Weighted random selection - pick 3 unique options
+        val totalWeight = dropTable.sumOf { it.weight }
+        val chosen = mutableSetOf<UpgradeOption>()
+
+        while (chosen.size < 3 && chosen.size < dropTable.size) {
+            var random = (Math.random() * totalWeight).toInt()
+            for (option in dropTable) {
+                random -= option.weight
+                if (random <= 0 && !chosen.contains(option)) {
+                    chosen.add(option)
+                    break
+                }
             }
         }
+
+        upgradeOptions.addAll(chosen)
     }
 
     private fun applyUpgrade(option: UpgradeOption) {
         when (option.type) {
-            UpgradeType.DAMAGE -> bulletDamage *= 1.12f  // Further nerfed
-            UpgradeType.FIRE_RATE -> fireRate *= 1.12f  // Further nerfed
-            UpgradeType.SPEED -> playerSpeed *= 1.10f  // Further nerfed
-            UpgradeType.HP -> {
-                maxHp += 8  // Heavily nerfed from 20
-                playerHp = maxHp
+            UpgradeType.STASIS_CORE -> {
+                hasStasisCore = true
+            }
+            UpgradeType.OVERCLOCKER -> {
+                overclockActive = true
+                overclockTimer = 5f  // 5 seconds
+            }
+            UpgradeType.QUANTUM_MIRROR -> {
+                hasQuantumMirror = true
+            }
+            UpgradeType.FRAGMENT_DRIVE -> {
+                hasFragmentDrive = true
+            }
+            UpgradeType.CONVERT_TO_ORBS -> {
+                convertAllBulletsToOrbs()
+            }
+            UpgradeType.CONVERT_TO_BULLETS -> {
+                convertAllBulletsToPlayerBullets()
+            }
+            UpgradeType.CONVERT_TO_HOMING -> {
+                convertAllBulletsToHoming()
             }
         }
         wave += 1
@@ -1458,6 +1491,44 @@ class GameView(context: Context) : View(context) {
         // Start countdown like settings menu
         countdownValue = 3
         countdownAlpha = 1f
+    }
+
+    // Bullet converter functions
+    private fun convertAllBulletsToOrbs() {
+        for (eb in enemyBullets) {
+            greenOrbs.add(GreenOrb(eb.x, eb.y))
+        }
+        enemyBullets.clear()
+    }
+
+    private fun convertAllBulletsToPlayerBullets() {
+        for (eb in enemyBullets) {
+            bullets.add(Bullet(eb.x, eb.y, 0f, -800f))  // Shoot upward
+        }
+        enemyBullets.clear()
+    }
+
+    private fun convertAllBulletsToHoming() {
+        for (eb in enemyBullets) {
+            // Find nearest enemy and shoot homing projectile at them
+            var nearestEnemy: Enemy? = null
+            var nearestDist = Float.MAX_VALUE
+            for (e in enemies) {
+                val dist = hypot((e.x - eb.x).toDouble(), (e.y - eb.y).toDouble()).toFloat()
+                if (dist < nearestDist) {
+                    nearestDist = dist
+                    nearestEnemy = e
+                }
+            }
+            if (nearestEnemy != null) {
+                val dx = nearestEnemy.x - eb.x
+                val dy = nearestEnemy.y - eb.y
+                val len = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                val speed = 600f
+                bullets.add(Bullet(eb.x, eb.y, (dx / len) * speed, (dy / len) * speed))
+            }
+        }
+        enemyBullets.clear()
     }
 
     private fun handleGachaTouch(x: Float, y: Float) {
