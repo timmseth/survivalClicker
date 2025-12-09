@@ -1620,20 +1620,6 @@ class GameView(context: Context) : View(context) {
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val x = event.getX(0)  // Use first pointer for slider
-                val y = event.getY(0)
-
-                // Handle sprite scale slider dragging
-                if (currentMenu == "SETTINGS" && spriteScaleSliderRect.contains(x, y)) {
-                    val minScale = 1f
-                    val maxScale = 128f
-                    val sliderWidth = spriteScaleSliderRect.width()
-                    val sliderLeft = spriteScaleSliderRect.left
-                    val normalizedX = ((x - sliderLeft) / sliderWidth).coerceIn(0f, 1f)
-                    spriteScale = minScale + normalizedX * (maxScale - minScale)
-                    return true
-                }
-
                 if (joyPointerId != -1) {
                     val pIndex = event.findPointerIndex(joyPointerId)
                     if (pIndex != -1) {
@@ -1918,63 +1904,29 @@ class GameView(context: Context) : View(context) {
             // Draw appropriate menu based on currentMenu
             when (currentMenu) {
                 "SETTINGS" -> {
-                    // Settings menu
+                    // Settings menu - tap gear icon in bottom-left to open full settings
                     canvas.drawText("SETTINGS", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
 
-                    // Sprite Scale Slider
-                    val labelPaint = Paint().apply {
+                    val instructionPaint = Paint().apply {
                         color = Color.WHITE
-                        textSize = 32f
-                        textAlign = Paint.Align.LEFT
-                        isAntiAlias = true
-                    }
-                    val valuePaint = Paint().apply {
-                        color = Color.GREEN
-                        textSize = 48f
+                        textSize = 28f
                         textAlign = Paint.Align.CENTER
-                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    val gearEmojiPaint = Paint().apply {
+                        color = Color.CYAN
+                        textSize = 120f
+                        textAlign = Paint.Align.CENTER
                         isAntiAlias = true
                     }
 
-                    canvas.drawText("Sprite Scale (for debugging)", menuLeft + 40f, 190f, labelPaint)
-                    canvas.drawText(spriteScale.toInt().toString(), menuLeft + menuWidth / 2f, 250f, valuePaint)
-
-                    // Slider track
-                    val sliderY = 300f
-                    val sliderWidth = menuWidth * 0.85f
-                    val sliderLeft = menuLeft + (menuWidth - sliderWidth) / 2f
-                    val trackPaint = Paint().apply {
-                        color = Color.DKGRAY
-                        style = Paint.Style.FILL
-                    }
-                    canvas.drawRoundRect(
-                        sliderLeft, sliderY - 5f,
-                        sliderLeft + sliderWidth, sliderY + 5f,
-                        5f, 5f, trackPaint
-                    )
-
-                    // Slider thumb
-                    val minScale = 1f
-                    val maxScale = 128f
-                    val thumbX = sliderLeft + ((spriteScale - minScale) / (maxScale - minScale)) * sliderWidth
-                    val thumbPaint = Paint().apply {
-                        color = Color.CYAN
-                        style = Paint.Style.FILL
-                    }
-                    canvas.drawCircle(thumbX, sliderY, 20f, thumbPaint)
-
-                    // Save slider rect for touch handling
-                    spriteScaleSliderRect = RectF(sliderLeft, sliderY - 30f, sliderLeft + sliderWidth, sliderY + 30f)
+                    // Large gear icon
+                    canvas.drawText("⚙", menuLeft + menuWidth / 2f, h / 2f - 50f, gearEmojiPaint)
 
                     // Instructions
-                    val instructionPaint = Paint().apply {
-                        color = Color.argb(200, 255, 255, 255)
-                        textSize = 24f
-                        textAlign = Paint.Align.LEFT
-                        isAntiAlias = true
-                    }
-                    canvas.drawText("Drag slider to adjust enemy sprite size.", menuLeft + 40f, 370f, instructionPaint)
-                    canvas.drawText("Find the correct value and report it!", menuLeft + 40f, 400f, instructionPaint)
+                    canvas.drawText("Tap the gear icon", menuLeft + menuWidth / 2f, h / 2f + 60f, instructionPaint)
+                    canvas.drawText("in the bottom-left corner", menuLeft + menuWidth / 2f, h / 2f + 95f, instructionPaint)
+                    canvas.drawText("to open full settings", menuLeft + menuWidth / 2f, h / 2f + 130f, instructionPaint)
                 }
                 "UPGRADES" -> {
                     // Upgrades menu (existing clicker UI)
@@ -2118,8 +2070,22 @@ class GameView(context: Context) : View(context) {
         )
         canvas.drawRect(settingsTabRect, tabBorderPaint)
 
-        // "S" icon for Settings tab
-        canvas.drawText("S", settingsTabRect.centerX(), settingsTabRect.centerY() + 16f, tabTextPaint)
+        // Settings gear icon
+        val gearIconPaint = Paint().apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+            isAntiAlias = true
+        }
+        val gearCenterX = settingsTabRect.centerX()
+        val gearCenterY = settingsTabRect.centerY()
+        canvas.drawCircle(gearCenterX, gearCenterY, 15f, gearIconPaint)
+        canvas.drawCircle(gearCenterX, gearCenterY, 6f, gearIconPaint)
+        // Gear teeth (4 lines extending from center)
+        canvas.drawLine(gearCenterX - 18f, gearCenterY, gearCenterX - 12f, gearCenterY, gearIconPaint)
+        canvas.drawLine(gearCenterX + 12f, gearCenterY, gearCenterX + 18f, gearCenterY, gearIconPaint)
+        canvas.drawLine(gearCenterX, gearCenterY - 18f, gearCenterX, gearCenterY - 12f, gearIconPaint)
+        canvas.drawLine(gearCenterX, gearCenterY + 12f, gearCenterX, gearCenterY + 18f, gearIconPaint)
 
         // Upgrades tab (bottom) - square button
         val upgradesShadowRect = RectF(
@@ -2135,8 +2101,23 @@ class GameView(context: Context) : View(context) {
         )
         canvas.drawRect(upgradesTabRect, tabBorderPaint)
 
-        // "U" icon for Upgrades tab
-        canvas.drawText("U", upgradesTabRect.centerX(), upgradesTabRect.centerY() + 16f, tabTextPaint)
+        // Dollar sign with orb count
+        val dollarPaint = Paint().apply {
+            color = Color.GREEN
+            textSize = 36f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        val orbCountPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 18f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        canvas.drawText("$", upgradesTabRect.centerX(), upgradesTabRect.centerY() + 2f, dollarPaint)
+        canvas.drawText(orbCurrency.toString(), upgradesTabRect.centerX(), upgradesTabRect.centerY() + 24f, orbCountPaint)
 
         // Settings icon in bottom-left (gear icon)
         canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 35f, pauseBgPaint)
