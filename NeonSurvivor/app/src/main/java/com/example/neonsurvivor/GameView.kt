@@ -47,10 +47,17 @@ class GameView(context: Context) : View(context) {
 
     // Sprite scaling slider for debugging
     private var spriteScale = 64f  // Adjustable sprite size (64 is correct for chibi-layered.png)
-    private var spriteScaleSliderRect = RectF()
 
-    // Settings icon (moved to bottom-left)
-    private var settingsIconRect = RectF()
+    // Settings controls in flyout menu
+    private var musicToggleRect = RectF()
+    private var soundToggleRect = RectF()
+    private var powerupsToggleRect = RectF()
+    private var musicVolumeSliderRect = RectF()
+    private var rainVolumeSliderRect = RectF()
+    private var saveButtonRect = RectF()
+    private var loadButtonRect = RectF()
+    private var draggingMusicSlider = false
+    private var draggingRainSlider = false
 
     // Screen shake & damage feedback
     private var screenShakeX = 0f
@@ -463,16 +470,6 @@ class GameView(context: Context) : View(context) {
             playerY = h / 2f
             // Floating joystick - no fixed position, appears where user touches
 
-            // Settings icon in bottom-left corner (comfortable one-handed reach)
-            val iconSize = 70f
-            val margin = 30f
-            settingsIconRect = RectF(
-                margin,
-                h - iconSize - margin,
-                margin + iconSize,
-                h - margin
-            )
-
             // Menu tabs on right edge - square buttons
             val tabSize = 80f  // Square tabs
             val tabGap = 20f
@@ -492,9 +489,6 @@ class GameView(context: Context) : View(context) {
                 w.toFloat(),
                 h / 2f + tabSize + tabGap / 2f
             )
-
-            // Sprite scale slider rect (will be positioned in settings menu)
-            spriteScaleSliderRect = RectF(0f, 0f, 0f, 0f)  // Set when menu opens
 
             spawnWave()
 
@@ -1550,14 +1544,47 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
-            // Check settings icon tap (opens Settings activity)
-            if (!inGacha && settingsIconRect.contains(x, y)) {
-                currentMenu = null  // Close menu
-                isPaused = true
-                val intent = Intent(context, SettingsActivity::class.java)
-                (context as Activity).startActivity(intent)
-                // Will unpause in onResume
-                return true
+            // Check settings controls (in Settings menu)
+            if (currentMenu == "SETTINGS" && !inGacha && !isDying && !inDeathScreen) {
+                when {
+                    musicToggleRect.contains(x, y) -> {
+                        val musicEnabled = settingsPrefs.getBoolean("music_enabled", true)
+                        settingsPrefs.edit().putBoolean("music_enabled", !musicEnabled).apply()
+                        if (!musicEnabled) {
+                            AudioManager.startMusic(context)
+                        } else {
+                            AudioManager.stopMusic()
+                        }
+                        return true
+                    }
+                    soundToggleRect.contains(x, y) -> {
+                        val soundEnabled = settingsPrefs.getBoolean("sound_enabled", true)
+                        settingsPrefs.edit().putBoolean("sound_enabled", !soundEnabled).apply()
+                        if (!soundEnabled) {
+                            AudioManager.startRain(context)
+                        } else {
+                            AudioManager.stopRain()
+                        }
+                        return true
+                    }
+                    powerupsToggleRect.contains(x, y) -> {
+                        val powerupsEnabled = settingsPrefs.getBoolean("powerups_enabled", true)
+                        settingsPrefs.edit().putBoolean("powerups_enabled", !powerupsEnabled).apply()
+                        return true
+                    }
+                    saveButtonRect.contains(x, y) -> {
+                        prefs.edit().putBoolean("trigger_save", true).apply()
+                        saveGameState()
+                        return true
+                    }
+                    loadButtonRect.contains(x, y) -> {
+                        if (prefs.getInt("saved_wave", 0) > 0) {
+                            prefs.edit().putBoolean("trigger_load", true).apply()
+                            loadGameState()
+                        }
+                        return true
+                    }
+                }
             }
         }
 
@@ -1599,14 +1626,40 @@ class GameView(context: Context) : View(context) {
                 val touchingUI = !inGacha && !isDying && !inDeathScreen && (
                     settingsTabRect.contains(x, y) ||
                     upgradesTabRect.contains(x, y) ||
-                    settingsIconRect.contains(x, y) ||
                     (currentMenu == "UPGRADES" && (
                         damageButtonRect.contains(x, y) ||
                         fireButtonRect.contains(x, y) ||
                         speedButtonRect.contains(x, y) ||
                         hpButtonRect.contains(x, y)
+                    )) ||
+                    (currentMenu == "SETTINGS" && (
+                        musicToggleRect.contains(x, y) ||
+                        soundToggleRect.contains(x, y) ||
+                        powerupsToggleRect.contains(x, y) ||
+                        musicVolumeSliderRect.contains(x, y) ||
+                        rainVolumeSliderRect.contains(x, y) ||
+                        saveButtonRect.contains(x, y) ||
+                        loadButtonRect.contains(x, y)
                     ))
                 )
+
+                // Handle slider dragging start
+                if (currentMenu == "SETTINGS" && !touchingUI) {
+                    if (musicVolumeSliderRect.contains(x, y)) {
+                        draggingMusicSlider = true
+                        val ratio = ((x - musicVolumeSliderRect.left) / musicVolumeSliderRect.width()).coerceIn(0f, 1f)
+                        settingsPrefs.edit().putFloat("music_volume", ratio).apply()
+                        AudioManager.updateMusicVolume(ratio)
+                        return true
+                    }
+                    if (rainVolumeSliderRect.contains(x, y)) {
+                        draggingRainSlider = true
+                        val ratio = ((x - rainVolumeSliderRect.left) / rainVolumeSliderRect.width()).coerceIn(0f, 1f)
+                        settingsPrefs.edit().putFloat("rain_volume", ratio).apply()
+                        AudioManager.rainVolume = ratio
+                        return true
+                    }
+                }
 
                 // Floating joystick: appears anywhere on screen (except UI buttons)
                 if (joyPointerId == -1 && !touchingUI && !inGacha && !inDeathScreen) {
@@ -1620,6 +1673,22 @@ class GameView(context: Context) : View(context) {
             }
 
             MotionEvent.ACTION_MOVE -> {
+                val x = event.getX(0)
+
+                // Handle slider dragging
+                if (draggingMusicSlider && musicVolumeSliderRect.width() > 0) {
+                    val ratio = ((x - musicVolumeSliderRect.left) / musicVolumeSliderRect.width()).coerceIn(0f, 1f)
+                    settingsPrefs.edit().putFloat("music_volume", ratio).apply()
+                    AudioManager.updateMusicVolume(ratio)
+                    return true
+                }
+                if (draggingRainSlider && rainVolumeSliderRect.width() > 0) {
+                    val ratio = ((x - rainVolumeSliderRect.left) / rainVolumeSliderRect.width()).coerceIn(0f, 1f)
+                    settingsPrefs.edit().putFloat("rain_volume", ratio).apply()
+                    AudioManager.rainVolume = ratio
+                    return true
+                }
+
                 if (joyPointerId != -1) {
                     val pIndex = event.findPointerIndex(joyPointerId)
                     if (pIndex != -1) {
@@ -1640,6 +1709,10 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_POINTER_UP,
             MotionEvent.ACTION_CANCEL -> {
+                // Release slider dragging
+                draggingMusicSlider = false
+                draggingRainSlider = false
+
                 val pid = event.getPointerId(index)
                 if (pid == joyPointerId) {
                     joyPointerId = -1
@@ -1712,12 +1785,33 @@ class GameView(context: Context) : View(context) {
 
         // Draw enemies with animated sprites
         for (e in enemies) {
-            // Sprite sheet: 144×48 pixels = 9 columns × 3 rows of 16×16px sprites
-            // Each character (row) has: down=cols 0,3,6  left=cols 1,4,7  up=cols 2,5,8
-            val row = when (e.type) {
-                EnemyType.CIRCLE -> 0
-                EnemyType.TRIANGLE -> 1
-                else -> 2  // SQUARE, PENTAGON, HEXAGON
+            // Sprite sheet: chibi-layered.png = 9 columns × 3 rows
+            // Row 1 (index 0): Blue-hooded character
+            // Row 2 (index 1): Pink-haired character
+            // Row 3 (index 2): Brown-hooded character
+
+            // ENEMY TYPE 1 (CIRCLE) - Row 1
+            // Moving Down:  Column 1,4,7 (indices 0,3,6)
+            // Moving Left:  Column 2,5,8 (indices 1,4,7)
+            // Moving Up:    Column 3,6,9 (indices 2,5,8)
+            // Moving Right: Flip left sprite horizontally
+
+            // ENEMY TYPE 2 (TRIANGLE) - Row 2
+            // Moving Down:  Column 1,4,7 (indices 0,3,6)
+            // Moving Left:  Column 2,5,8 (indices 1,4,7)
+            // Moving Up:    Column 3,6,9 (indices 2,5,8)
+            // Moving Right: Flip left sprite horizontally
+
+            // ENEMY TYPE 3 (SQUARE/PENTAGON/HEXAGON) - Row 3
+            // Moving Down:  Column 1,4,7 (indices 0,3,6)
+            // Moving Left:  Column 2,5,8 (indices 1,4,7)
+            // Moving Up:    Column 3,6,9 (indices 2,5,8)
+            // Moving Right: Flip left sprite horizontally
+
+            val enemyRow = when (e.type) {
+                EnemyType.CIRCLE -> 1    // Row 1 (index 0)
+                EnemyType.TRIANGLE -> 2  // Row 2 (index 1)
+                else -> 3                // Row 3 (index 2) - SQUARE, PENTAGON, HEXAGON
             }
 
             // Determine direction based on movement toward player
@@ -1726,28 +1820,28 @@ class GameView(context: Context) : View(context) {
             val absX = abs(dx)
             val absY = abs(dy)
 
-            // Select base column for direction
-            // Pattern: down,left,up repeated 3 times (cols 0-8)
-            // Down: 0,3,6  Left: 1,4,7  Up: 2,5,8
-            val (baseCol, flipHorizontal) = when {
-                absY > absX && dy > 0 -> Pair(0, false)  // Down: cols 0,3,6
-                absY > absX && dy < 0 -> Pair(2, false)  // Up: cols 2,5,8
-                absX >= absY && dx < 0 -> Pair(1, false) // Left: cols 1,4,7
-                else -> Pair(1, true)  // Right: flip left sprite
+            // Select column sequence for direction
+            val (firstColumn, flipHorizontal) = when {
+                absY > absX && dy > 0 -> Pair(1, false)  // Moving Down: columns 1,4,7
+                absY > absX && dy < 0 -> Pair(3, false)  // Moving Up: columns 3,6,9
+                absX >= absY && dx < 0 -> Pair(2, false) // Moving Left: columns 2,5,8
+                else -> Pair(2, true)  // Moving Right: flip left sprite
             }
 
-            // 3 animation frames: baseCol, baseCol+3, baseCol+6
+            // 3 animation frames: cycle through columns (e.g., 1→4→7)
             val animIndex = e.animFrame % 3
-            val frameCol = baseCol + (animIndex * 3)
+            val columnNumber = firstColumn + (animIndex * 3)  // 1,4,7 or 2,5,8 or 3,6,9
+            val columnIndex = columnNumber - 1  // Convert to 0-based index (0-8)
 
             // Use adjustable sprite scale from Settings menu slider
             val spriteSizeInt = spriteScale.toInt()
 
+            val rowIndex = enemyRow - 1  // Convert to 0-based (1,2,3 → 0,1,2)
             val srcRect = Rect(
-                frameCol * spriteSizeInt,
-                row * spriteSizeInt,
-                (frameCol + 1) * spriteSizeInt,
-                (row + 1) * spriteSizeInt
+                columnIndex * spriteSizeInt,
+                rowIndex * spriteSizeInt,
+                (columnIndex + 1) * spriteSizeInt,
+                (rowIndex + 1) * spriteSizeInt
             )
 
             // Draw sprite (make it big enough to see clearly)
@@ -1904,29 +1998,148 @@ class GameView(context: Context) : View(context) {
             // Draw appropriate menu based on currentMenu
             when (currentMenu) {
                 "SETTINGS" -> {
-                    // Settings menu - tap gear icon in bottom-left to open full settings
+                    // Settings menu with all controls
                     canvas.drawText("SETTINGS", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
 
-                    val instructionPaint = Paint().apply {
+                    val labelPaint = Paint().apply {
                         color = Color.WHITE
-                        textSize = 28f
-                        textAlign = Paint.Align.CENTER
+                        textSize = 32f
                         isAntiAlias = true
                     }
-                    val gearEmojiPaint = Paint().apply {
+                    val togglePaint = Paint().apply {
                         color = Color.CYAN
-                        textSize = 120f
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    val toggleOffPaint = Paint().apply {
+                        color = Color.argb(100, 100, 100, 100)
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    val toggleBorderPaint = Paint().apply {
+                        color = Color.CYAN
+                        style = Paint.Style.STROKE
+                        strokeWidth = 4f
+                        isAntiAlias = true
+                    }
+                    val sliderTrackPaint = Paint().apply {
+                        color = Color.DKGRAY
+                        style = Paint.Style.FILL
+                    }
+
+                    val padding = 30f
+                    var yPos = 160f
+                    val toggleWidth = 120f
+                    val toggleHeight = 50f
+
+                    // Music toggle
+                    val musicEnabled = settingsPrefs.getBoolean("music_enabled", true)
+                    canvas.drawText("MUSIC", menuLeft + padding, yPos + 36f, labelPaint)
+                    musicToggleRect = RectF(
+                        menuLeft + menuWidth - toggleWidth - padding,
+                        yPos,
+                        menuLeft + menuWidth - padding,
+                        yPos + toggleHeight
+                    )
+                    canvas.drawRoundRect(musicToggleRect, 25f, 25f, if (musicEnabled) togglePaint else toggleOffPaint)
+                    canvas.drawRoundRect(musicToggleRect, 25f, 25f, toggleBorderPaint)
+                    labelPaint.textAlign = Paint.Align.CENTER
+                    canvas.drawText(if (musicEnabled) "ON" else "OFF", musicToggleRect.centerX(), musicToggleRect.centerY() + 10f, labelPaint)
+                    labelPaint.textAlign = Paint.Align.LEFT
+                    yPos += 70f
+
+                    // Music volume slider
+                    val musicVolume = settingsPrefs.getFloat("music_volume", 0.5f)
+                    canvas.drawText("Music Vol: ${(musicVolume * 100).toInt()}%", menuLeft + padding, yPos, labelPaint)
+                    yPos += 10f
+                    musicVolumeSliderRect = RectF(menuLeft + padding, yPos, menuLeft + menuWidth - padding, yPos + 40f)
+                    canvas.drawRoundRect(musicVolumeSliderRect, 10f, 10f, sliderTrackPaint)
+                    val musicFillWidth = musicVolumeSliderRect.width() * musicVolume
+                    canvas.drawRoundRect(
+                        musicVolumeSliderRect.left, musicVolumeSliderRect.top,
+                        musicVolumeSliderRect.left + musicFillWidth, musicVolumeSliderRect.bottom,
+                        10f, 10f, togglePaint
+                    )
+                    yPos += 60f
+
+                    // Sound toggle
+                    val soundEnabled = settingsPrefs.getBoolean("sound_enabled", true)
+                    canvas.drawText("SOUND", menuLeft + padding, yPos + 36f, labelPaint)
+                    soundToggleRect = RectF(
+                        menuLeft + menuWidth - toggleWidth - padding,
+                        yPos,
+                        menuLeft + menuWidth - padding,
+                        yPos + toggleHeight
+                    )
+                    canvas.drawRoundRect(soundToggleRect, 25f, 25f, if (soundEnabled) togglePaint else toggleOffPaint)
+                    canvas.drawRoundRect(soundToggleRect, 25f, 25f, toggleBorderPaint)
+                    labelPaint.textAlign = Paint.Align.CENTER
+                    canvas.drawText(if (soundEnabled) "ON" else "OFF", soundToggleRect.centerX(), soundToggleRect.centerY() + 10f, labelPaint)
+                    labelPaint.textAlign = Paint.Align.LEFT
+                    yPos += 70f
+
+                    // Rain volume slider
+                    val rainVolume = settingsPrefs.getFloat("rain_volume", 0.3f)
+                    canvas.drawText("Rain Vol: ${(rainVolume * 100).toInt()}%", menuLeft + padding, yPos, labelPaint)
+                    yPos += 10f
+                    rainVolumeSliderRect = RectF(menuLeft + padding, yPos, menuLeft + menuWidth - padding, yPos + 40f)
+                    canvas.drawRoundRect(rainVolumeSliderRect, 10f, 10f, sliderTrackPaint)
+                    val rainFillWidth = rainVolumeSliderRect.width() * rainVolume
+                    canvas.drawRoundRect(
+                        rainVolumeSliderRect.left, rainVolumeSliderRect.top,
+                        rainVolumeSliderRect.left + rainFillWidth, rainVolumeSliderRect.bottom,
+                        10f, 10f, togglePaint
+                    )
+                    yPos += 60f
+
+                    // Powerups toggle
+                    val powerupsEnabled = settingsPrefs.getBoolean("powerups_enabled", true)
+                    canvas.drawText("POWERUPS", menuLeft + padding, yPos + 36f, labelPaint)
+                    powerupsToggleRect = RectF(
+                        menuLeft + menuWidth - toggleWidth - padding,
+                        yPos,
+                        menuLeft + menuWidth - padding,
+                        yPos + toggleHeight
+                    )
+                    canvas.drawRoundRect(powerupsToggleRect, 25f, 25f, if (powerupsEnabled) togglePaint else toggleOffPaint)
+                    canvas.drawRoundRect(powerupsToggleRect, 25f, 25f, toggleBorderPaint)
+                    labelPaint.textAlign = Paint.Align.CENTER
+                    canvas.drawText(if (powerupsEnabled) "ON" else "OFF", powerupsToggleRect.centerX(), powerupsToggleRect.centerY() + 10f, labelPaint)
+                    labelPaint.textAlign = Paint.Align.LEFT
+                    yPos += 80f
+
+                    // Save/Load buttons
+                    val buttonWidth = (menuWidth - padding * 3) / 2f
+                    val buttonHeight = 80f
+                    val hasSave = prefs.getInt("saved_wave", 0) > 0
+
+                    saveButtonRect = RectF(menuLeft + padding, yPos, menuLeft + padding + buttonWidth, yPos + buttonHeight)
+                    loadButtonRect = RectF(menuLeft + padding * 2 + buttonWidth, yPos, menuLeft + menuWidth - padding, yPos + buttonHeight)
+
+                    // Save button
+                    canvas.drawRoundRect(saveButtonRect, 15f, 15f, Color.argb(150, 20, 20, 30), Paint())
+                    canvas.drawRoundRect(saveButtonRect, 15f, 15f, toggleBorderPaint)
+                    labelPaint.textAlign = Paint.Align.CENTER
+                    canvas.drawText("SAVE", saveButtonRect.centerX(), saveButtonRect.centerY() + 10f, labelPaint)
+
+                    // Load button (grayed out if no save)
+                    val loadBorderPaint = Paint().apply {
+                        color = if (hasSave) Color.CYAN else Color.GRAY
+                        style = Paint.Style.STROKE
+                        strokeWidth = 4f
+                        isAntiAlias = true
+                    }
+                    val loadTextPaint = Paint().apply {
+                        color = if (hasSave) Color.WHITE else Color.GRAY
+                        textSize = 32f
                         textAlign = Paint.Align.CENTER
                         isAntiAlias = true
                     }
+                    canvas.drawRoundRect(loadButtonRect, 15f, 15f, Color.argb(150, 20, 20, 30), Paint())
+                    canvas.drawRoundRect(loadButtonRect, 15f, 15f, loadBorderPaint)
+                    canvas.drawText("LOAD", loadButtonRect.centerX(), loadButtonRect.centerY() + 10f, loadTextPaint)
 
-                    // Large gear icon
-                    canvas.drawText("⚙", menuLeft + menuWidth / 2f, h / 2f - 50f, gearEmojiPaint)
-
-                    // Instructions
-                    canvas.drawText("Tap the gear icon", menuLeft + menuWidth / 2f, h / 2f + 60f, instructionPaint)
-                    canvas.drawText("in the bottom-left corner", menuLeft + menuWidth / 2f, h / 2f + 95f, instructionPaint)
-                    canvas.drawText("to open full settings", menuLeft + menuWidth / 2f, h / 2f + 130f, instructionPaint)
+                    labelPaint.textAlign = Paint.Align.LEFT
                 }
                 "UPGRADES" -> {
                     // Upgrades menu (existing clicker UI)
@@ -2118,19 +2331,6 @@ class GameView(context: Context) : View(context) {
         }
         canvas.drawText("$", upgradesTabRect.centerX(), upgradesTabRect.centerY() + 2f, dollarPaint)
         canvas.drawText(orbCurrency.toString(), upgradesTabRect.centerX(), upgradesTabRect.centerY() + 24f, orbCountPaint)
-
-        // Settings icon in bottom-left (gear icon)
-        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 35f, pauseBgPaint)
-
-        // Draw gear-like icon
-        val gearPaint = Paint().apply {
-            color = Color.CYAN
-            style = Paint.Style.STROKE
-            strokeWidth = 4f
-            isAntiAlias = true
-        }
-        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 18f, gearPaint)
-        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 8f, gearPaint)
 
         // Joystick in screen space
         if (joyActive) {
