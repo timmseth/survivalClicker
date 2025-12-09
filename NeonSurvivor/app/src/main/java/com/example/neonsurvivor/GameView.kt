@@ -494,6 +494,12 @@ class GameView(context: Context) : View(context) {
             AudioManager.startMusic(context)
             AudioManager.startRain(context)
 
+            // Workaround: Restart music after 3 seconds to ensure it plays
+            postDelayed({
+                AudioManager.stopMusic()
+                AudioManager.startMusic(context)
+            }, 3000)
+
             lastTimeNs = System.nanoTime()
             running = true
             initialized = true
@@ -1682,11 +1688,6 @@ class GameView(context: Context) : View(context) {
 
         // Draw enemies with animated sprites
         for (e in enemies) {
-            val glowRadius = e.getGlowRadius()
-
-            // Draw glow behind sprite
-            canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
-
             // Sprite sheet: 144×48 pixels = 9 columns × 3 rows of 16×16px sprites
             // Each character (row) has: down=cols 0,3,6  left=cols 1,4,7  up=cols 2,5,8
             val row = when (e.type) {
@@ -1725,6 +1726,10 @@ class GameView(context: Context) : View(context) {
 
             // Draw sprite (make it big enough to see clearly)
             val enemySize = 60f  // Fixed size - large enough to see 16×16px sprite clearly
+
+            // Draw glow BEHIND sprite (smaller than sprite)
+            val glowRadius = e.getGlowRadius()
+            canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, enemyGlowPaint)
 
             // Flip horizontally if moving right
             if (flipHorizontal) {
