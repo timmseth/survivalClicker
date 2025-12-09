@@ -1714,8 +1714,8 @@ class GameView(context: Context) : View(context) {
             val animIndex = e.animFrame % 3
             val frameCol = baseCol + (animIndex * 3)
 
-            // Each sprite is 16×16px
-            val spriteSize = 16
+            // Each sprite is 64×64px (testing larger size)
+            val spriteSize = 64
 
             val srcRect = Rect(
                 frameCol * spriteSize,
