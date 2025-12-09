@@ -1650,7 +1650,7 @@ class GameView(context: Context) : View(context) {
                 )
 
                 // Handle slider dragging start
-                if (currentMenu == "SETTINGS" && !touchingUI) {
+                if (currentMenu == "SETTINGS") {
                     if (musicVolumeSliderRect.contains(x, y)) {
                         draggingMusicSlider = true
                         val ratio = ((x - musicVolumeSliderRect.left) / musicVolumeSliderRect.width()).coerceIn(0f, 1f)
@@ -1667,8 +1667,8 @@ class GameView(context: Context) : View(context) {
                     }
                 }
 
-                // Floating joystick: appears anywhere on screen (except UI buttons)
-                if (joyPointerId == -1 && !touchingUI && !inGacha && !inDeathScreen) {
+                // Floating joystick: appears anywhere on screen (except UI buttons or when menus are open)
+                if (joyPointerId == -1 && !touchingUI && !inGacha && !inDeathScreen && currentMenu == null) {
                     joyPointerId = event.getPointerId(index)
                     joyBaseX = x
                     joyBaseY = y
@@ -2198,13 +2198,15 @@ class GameView(context: Context) : View(context) {
                         isAntiAlias = true
                     }
 
-                    // Upgrade buttons (vertically stacked in menu) - with padding
+                    // Upgrade buttons (vertically stacked at BOTTOM of menu for thumb reach)
                     val buttonPadding = 30f  // Padding from edges
                     val buttonWidth = menuWidth - (buttonPadding * 2)
                     val buttonHeight = 100f
-                    val buttonGap = 24f
+                    val buttonGap = 20f
                     val buttonStartX = menuLeft + buttonPadding
-                    var buttonY = 260f
+                    // Start from bottom and work upward
+                    val bottomMargin = 30f
+                    var buttonY = h - bottomMargin - buttonHeight
 
                     // Helper function to draw button
                     fun drawButton(rect: RectF, label: String, level: Int, cost: Int) {
@@ -2224,24 +2226,24 @@ class GameView(context: Context) : View(context) {
                         canvas.drawText("Cost: $cost orbs", rect.centerX(), rect.centerY() + 35f, buttonDetailPaint)
                     }
 
-                    // Button 1: Damage
-                    damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-                    drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
-                    buttonY += buttonHeight + buttonGap
-
-                    // Button 2: Fire Rate
-                    fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-                    drawButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
-                    buttonY += buttonHeight + buttonGap
+                    // Button 4: HP (at bottom for easy thumb reach)
+                    hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
+                    buttonY -= buttonHeight + buttonGap
 
                     // Button 3: Speed
                     speedButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     drawButton(speedButtonRect, "SPEED+", clickerSpeedLevel, 10)
-                    buttonY += buttonHeight + buttonGap
+                    buttonY -= buttonHeight + buttonGap
 
-                    // Button 4: HP
-                    hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-                    drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
+                    // Button 2: Fire Rate
+                    fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(fireButtonRect, "FIRE RATE+", clickerFireRateLevel, 10)
+                    buttonY -= buttonHeight + buttonGap
+
+                    // Button 1: Damage (at top)
+                    damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
                 }
             }
         }
