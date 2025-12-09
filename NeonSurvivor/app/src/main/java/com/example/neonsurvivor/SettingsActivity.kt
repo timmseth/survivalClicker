@@ -33,8 +33,8 @@ class SettingsView(context: Context) : View(context) {
 
     private var musicEnabled = prefs.getBoolean("music_enabled", true)
     private var soundEnabled = prefs.getBoolean("sound_enabled", true)
-    private var musicVolume = prefs.getFloat("music_volume", 0.12f)
-    private var rainVolume = prefs.getFloat("rain_volume", 1.0f)
+    private var musicVolume = prefs.getFloat("music_volume", 0.5f)  // Default 50% volume
+    private var rainVolume = prefs.getFloat("rain_volume", 0.3f)  // Default 30% for ambient sound
     private var powerupsEnabled = prefs.getBoolean("powerups_enabled", true)
 
     // Paints

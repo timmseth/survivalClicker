@@ -1723,8 +1723,8 @@ class GameView(context: Context) : View(context) {
                 (row + 1) * spriteSize
             )
 
-            // Draw sprite (scaled to enemy radius * 2)
-            val enemySize = e.radius * 2.5f  // Slightly larger to see details
+            // Draw sprite (make it big enough to see clearly)
+            val enemySize = 60f  // Fixed size - large enough to see 16×16px sprite clearly
 
             // Flip horizontally if moving right
             if (flipHorizontal) {

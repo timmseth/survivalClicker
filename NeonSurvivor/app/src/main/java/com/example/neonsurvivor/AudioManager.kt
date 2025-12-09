@@ -31,8 +31,8 @@ object AudioManager {
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("music_enabled", true)) return
 
-        // Load saved volume
-        musicVolume = prefs.getFloat("music_volume", 0.12f)
+        // Load saved volume (default 50% on first run)
+        musicVolume = prefs.getFloat("music_volume", 0.5f)
 
         isPlaying = true
 
@@ -68,8 +68,8 @@ object AudioManager {
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("sound_enabled", true)) return
 
-        // Load saved volume
-        rainVolume = prefs.getFloat("rain_volume", 1.0f)
+        // Load saved volume (default 30% for ambient sound)
+        rainVolume = prefs.getFloat("rain_volume", 0.3f)
 
         rainPlaying = true
 
