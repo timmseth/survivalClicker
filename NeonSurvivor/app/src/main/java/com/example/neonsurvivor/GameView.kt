@@ -37,7 +37,15 @@ class GameView(context: Context) : View(context) {
     private var cameraX = 0f
     private var cameraY = 0f
 
-    // Settings icon
+    // Pause menu system
+    private var pauseMenuOpen = false
+    private var pauseMenuTabRect = RectF()
+    private var pauseMenuRect = RectF()
+    private var pauseMenuSlideProgress = 0f  // 0 = closed, 1 = open
+    private var unpauseCountdown = 0  // 3, 2, 1, 0 (0 = not counting)
+    private var unpauseCountdownAlpha = 0f
+
+    // Settings icon (moved to bottom-left)
     private var settingsIconRect = RectF()
 
     // Screen shake & damage feedback
@@ -451,13 +459,33 @@ class GameView(context: Context) : View(context) {
             playerY = h / 2f
             // Floating joystick - no fixed position, appears where user touches
 
-            // Settings icon in top-right corner
-            val iconSize = 60f
+            // Settings icon in bottom-left corner (comfortable one-handed reach)
+            val iconSize = 70f
+            val margin = 30f
             settingsIconRect = RectF(
-                w - iconSize - 20f,
-                20f,
-                w - 20f,
-                20f + iconSize
+                margin,
+                h - iconSize - margin,
+                margin + iconSize,
+                h - margin
+            )
+
+            // Pause menu tab on right edge (middle of screen)
+            val tabWidth = 50f
+            val tabHeight = 120f
+            pauseMenuTabRect = RectF(
+                w - tabWidth,
+                h / 2f - tabHeight / 2f,
+                w,
+                h / 2f + tabHeight / 2f
+            )
+
+            // Pause menu flyout (slides in from right)
+            val menuWidth = w * 0.85f
+            pauseMenuRect = RectF(
+                w,  // Starts off-screen right
+                0f,
+                w + menuWidth,
+                h
             )
 
             spawnWave()
@@ -630,6 +658,22 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun update(dt: Float) {
+        // Handle pause menu animation
+        val targetSlideProgress = if (pauseMenuOpen) 1f else 0f
+        pauseMenuSlideProgress += (targetSlideProgress - pauseMenuSlideProgress) * 10f * dt
+        pauseMenuSlideProgress = pauseMenuSlideProgress.coerceIn(0f, 1f)
+
+        // Handle unpause countdown
+        if (unpauseCountdown > 0) {
+            unpauseCountdownAlpha -= dt * 1.5f
+            if (unpauseCountdownAlpha <= 0f) {
+                unpauseCountdown--
+                if (unpauseCountdown > 0) {
+                    unpauseCountdownAlpha = 1f
+                }
+            }
+        }
+
         if (playerHp <= 0 && !isDying && !inDeathScreen) {
             // Trigger death sequence
             isDying = true
@@ -657,6 +701,11 @@ class GameView(context: Context) : View(context) {
 
         if (inDeathScreen) {
             return // Freeze game on death screen
+        }
+
+        // Pause game when menu is open or countdown is running
+        if (pauseMenuOpen || unpauseCountdown > 0) {
+            return
         }
 
         if (!inGacha) {
@@ -1424,46 +1473,57 @@ class GameView(context: Context) : View(context) {
         val action = event.actionMasked
         val index = event.actionIndex
 
-        // Check clicker upgrade buttons (not paused or in gacha or dying)
-        if (action == MotionEvent.ACTION_UP && !inGacha && !isDying && !inDeathScreen) {
+        // Handle pause menu touches
+        if (action == MotionEvent.ACTION_UP) {
             val x = event.getX(index)
             val y = event.getY(index)
 
-            val cost = 10
-            when {
-                damageButtonRect.contains(x, y) && orbCurrency >= cost -> {
-                    orbCurrency -= cost
-                    clickerDamageLevel++
-                    bulletDamage += bulletDamage * 0.01f // +1% permanent
-                    return true
+            // Check pause menu tab (always visible)
+            if (!inGacha && !isDying && !inDeathScreen && pauseMenuTabRect.contains(x, y)) {
+                pauseMenuOpen = !pauseMenuOpen
+                if (!pauseMenuOpen) {
+                    // Starting unpause countdown
+                    unpauseCountdown = 3
+                    unpauseCountdownAlpha = 1f
                 }
-                fireButtonRect.contains(x, y) && orbCurrency >= cost -> {
-                    orbCurrency -= cost
-                    clickerFireRateLevel++
-                    fireRate += fireRate * 0.01f // +1% permanent
-                    return true
-                }
-                speedButtonRect.contains(x, y) && orbCurrency >= cost -> {
-                    orbCurrency -= cost
-                    clickerSpeedLevel++
-                    playerSpeed += playerSpeed * 0.01f // +1% permanent
-                    return true
-                }
-                hpButtonRect.contains(x, y) && orbCurrency >= cost -> {
-                    orbCurrency -= cost
-                    clickerHpLevel++
-                    maxHp += (maxHp * 0.01f).toInt() // +1% permanent
-                    playerHp += (maxHp * 0.01f).toInt() // Also heal by the increase
-                    return true
+                return true
+            }
+
+            // Check clicker upgrade buttons inside pause menu
+            if (pauseMenuOpen && !inGacha && !isDying && !inDeathScreen) {
+                val cost = 10
+                when {
+                    damageButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                        orbCurrency -= cost
+                        clickerDamageLevel++
+                        bulletDamage += bulletDamage * 0.01f // +1% permanent
+                        return true
+                    }
+                    fireButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                        orbCurrency -= cost
+                        clickerFireRateLevel++
+                        fireRate += fireRate * 0.01f // +1% permanent
+                        return true
+                    }
+                    speedButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                        orbCurrency -= cost
+                        clickerSpeedLevel++
+                        playerSpeed += playerSpeed * 0.01f // +1% permanent
+                        return true
+                    }
+                    hpButtonRect.contains(x, y) && orbCurrency >= cost -> {
+                        orbCurrency -= cost
+                        clickerHpLevel++
+                        maxHp += (maxHp * 0.01f).toInt() // +1% permanent
+                        playerHp += (maxHp * 0.01f).toInt() // Also heal by the increase
+                        return true
+                    }
                 }
             }
-        }
 
-        // Check settings icon tap (not paused or in gacha)
-        if (action == MotionEvent.ACTION_UP && !inGacha) {
-            val x = event.getX(index)
-            val y = event.getY(index)
-            if (settingsIconRect.contains(x, y)) {
+            // Check settings icon tap (opens Settings activity)
+            if (!inGacha && settingsIconRect.contains(x, y)) {
+                pauseMenuOpen = false  // Close pause menu
                 isPaused = true
                 val intent = Intent(context, SettingsActivity::class.java)
                 (context as Activity).startActivity(intent)
@@ -1506,13 +1566,16 @@ class GameView(context: Context) : View(context) {
                 val x = event.getX(index)
                 val y = event.getY(index)
 
-                // Don't activate joystick if touching UI buttons
+                // Don't activate joystick if touching UI buttons or pause menu
                 val touchingUI = !inGacha && !isDying && !inDeathScreen && (
-                    damageButtonRect.contains(x, y) ||
-                    fireButtonRect.contains(x, y) ||
-                    speedButtonRect.contains(x, y) ||
-                    hpButtonRect.contains(x, y) ||
-                    settingsIconRect.contains(x, y)
+                    pauseMenuTabRect.contains(x, y) ||
+                    settingsIconRect.contains(x, y) ||
+                    (pauseMenuOpen && (
+                        damageButtonRect.contains(x, y) ||
+                        fireButtonRect.contains(x, y) ||
+                        speedButtonRect.contains(x, y) ||
+                        hpButtonRect.contains(x, y)
+                    ))
                 )
 
                 // Floating joystick: appears anywhere on screen (except UI buttons)
@@ -1786,75 +1849,108 @@ class GameView(context: Context) : View(context) {
         canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpFillPaint)
         canvas.drawText("Wave $wave", 20f, barY + barHeight + 40f, textPaint)
 
-        // Clicker UI - Currency display and upgrade buttons
-        val clickerY = barY + barHeight + 80f
-        val buttonWidth = w * 0.22f
-        val buttonHeight = 65f  // Increased from 50f for easier touching
-        val buttonGap = 15f  // Increased gap
+        // Draw pause menu tab on right edge (always visible)
+        val tabPaint = Paint().apply {
+            color = Color.argb(220, 20, 20, 40)
+            isAntiAlias = true
+        }
+        val tabTextPaint = Paint().apply {
+            color = Color.CYAN
+            textSize = 36f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(pauseMenuTabRect, 15f, 15f, tabPaint)
+        canvas.save()
+        canvas.rotate(90f, pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY())
+        canvas.drawText("MENU", pauseMenuTabRect.centerX(), pauseMenuTabRect.centerY() + 12f, tabTextPaint)
+        canvas.restore()
 
-        // Currency display (using class-level paint)
-        val currencyText = "Orbs: $orbCurrency"
-        canvas.drawText(currencyText, 20f, clickerY, currencyPaint)
+        // Draw flyout pause menu (slides in from right)
+        if (pauseMenuSlideProgress > 0.01f) {
+            val menuWidth = w * 0.85f
+            val menuLeft = w - (menuWidth * pauseMenuSlideProgress)
 
-        // Upgrade buttons (4 buttons in a row, centered with equal margins - using class-level paints)
-        val totalButtonsWidth = buttonWidth * 4 + buttonGap * 3
-        val buttonStartX = (w - totalButtonsWidth) / 2f  // Center the row
-        val buttonY = clickerY + 25f
+            val menuBgPaint = Paint().apply {
+                color = Color.argb(240, 10, 10, 25)
+                isAntiAlias = true
+            }
 
-        // Button 1: Damage (+1% per level, costs 10 orbs)
-        damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
-        canvas.drawRoundRect(damageButtonRect, 10f, 10f, buttonBgPaint)
-        canvas.drawRoundRect(damageButtonRect, 10f, 10f, buttonBorderPaint)
-        canvas.drawText("DMG+", damageButtonRect.centerX(), damageButtonRect.centerY() - 10f, buttonTextPaint)
-        canvas.drawText("$clickerDamageLevel (10)", damageButtonRect.centerX(), damageButtonRect.centerY() + 10f, buttonTextPaint)
+            canvas.drawRect(menuLeft, 0f, w, h, menuBgPaint)
 
-        // Button 2: Fire Rate
-        fireButtonRect = RectF(buttonStartX + buttonWidth + buttonGap, buttonY, buttonStartX + buttonWidth * 2 + buttonGap, buttonY + buttonHeight)
-        canvas.drawRoundRect(fireButtonRect, 10f, 10f, buttonBgPaint)
-        canvas.drawRoundRect(fireButtonRect, 10f, 10f, buttonBorderPaint)
-        canvas.drawText("FIRE+", fireButtonRect.centerX(), fireButtonRect.centerY() - 10f, buttonTextPaint)
-        canvas.drawText("$clickerFireRateLevel (10)", fireButtonRect.centerX(), fireButtonRect.centerY() + 10f, buttonTextPaint)
+            // Draw clicker UI inside pause menu
+            val menuTitlePaint = Paint().apply {
+                color = Color.CYAN
+                textSize = 48f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("UPGRADES", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
 
-        // Button 3: Speed
-        speedButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 2, buttonY, buttonStartX + buttonWidth * 3 + buttonGap * 2, buttonY + buttonHeight)
-        canvas.drawRoundRect(speedButtonRect, 10f, 10f, buttonBgPaint)
-        canvas.drawRoundRect(speedButtonRect, 10f, 10f, buttonBorderPaint)
-        canvas.drawText("SPD+", speedButtonRect.centerX(), speedButtonRect.centerY() - 10f, buttonTextPaint)
-        canvas.drawText("$clickerSpeedLevel (10)", speedButtonRect.centerX(), speedButtonRect.centerY() + 10f, buttonTextPaint)
+            // Currency display
+            val currencyText = "Orbs: $orbCurrency"
+            canvas.drawText(currencyText, menuLeft + menuWidth / 2f, 180f, currencyPaint)
 
-        // Button 4: HP
-        hpButtonRect = RectF(buttonStartX + (buttonWidth + buttonGap) * 3, buttonY, buttonStartX + buttonWidth * 4 + buttonGap * 3, buttonY + buttonHeight)
-        canvas.drawRoundRect(hpButtonRect, 10f, 10f, buttonBgPaint)
-        canvas.drawRoundRect(hpButtonRect, 10f, 10f, buttonBorderPaint)
-        canvas.drawText("HP+", hpButtonRect.centerX(), hpButtonRect.centerY() - 10f, buttonTextPaint)
-        canvas.drawText("$clickerHpLevel (10)", hpButtonRect.centerX(), hpButtonRect.centerY() + 10f, buttonTextPaint)
+            // Upgrade buttons (vertically stacked in menu)
+            val buttonWidth = menuWidth * 0.8f
+            val buttonHeight = 80f
+            val buttonGap = 20f
+            val buttonStartX = menuLeft + (menuWidth - buttonWidth) / 2f
+            var buttonY = 240f
 
-        // Pause icon (using class-level paints)
-        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 30f, pauseBgPaint)
+            // Button 1: Damage
+            damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+            canvas.drawRoundRect(damageButtonRect, 10f, 10f, buttonBgPaint)
+            canvas.drawRoundRect(damageButtonRect, 10f, 10f, buttonBorderPaint)
+            canvas.drawText("DMG+", damageButtonRect.centerX(), damageButtonRect.centerY() - 15f, buttonTextPaint)
+            canvas.drawText("Level: $clickerDamageLevel", damageButtonRect.centerX(), damageButtonRect.centerY() + 5f, buttonTextPaint)
+            canvas.drawText("Cost: 10 orbs", damageButtonRect.centerX(), damageButtonRect.centerY() + 25f, buttonTextPaint)
 
-        // Draw pause bars (two vertical rectangles)
-        val pauseCenterX = settingsIconRect.centerX()
-        val pauseCenterY = settingsIconRect.centerY()
-        val pauseBarWidth = 8f
-        val pauseBarHeight = 26f
-        val pauseBarGap = 10f
+            buttonY += buttonHeight + buttonGap
 
-        canvas.drawRoundRect(
-            pauseCenterX - pauseBarGap - pauseBarWidth,
-            pauseCenterY - pauseBarHeight / 2,
-            pauseCenterX - pauseBarGap,
-            pauseCenterY + pauseBarHeight / 2,
-            4f, 4f,
-            pauseIconPaint
-        )
-        canvas.drawRoundRect(
-            pauseCenterX + pauseBarGap,
-            pauseCenterY - pauseBarHeight / 2,
-            pauseCenterX + pauseBarGap + pauseBarWidth,
-            pauseCenterY + pauseBarHeight / 2,
-            4f, 4f,
-            pauseIconPaint
-        )
+            // Button 2: Fire Rate
+            fireButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+            canvas.drawRoundRect(fireButtonRect, 10f, 10f, buttonBgPaint)
+            canvas.drawRoundRect(fireButtonRect, 10f, 10f, buttonBorderPaint)
+            canvas.drawText("FIRE+", fireButtonRect.centerX(), fireButtonRect.centerY() - 15f, buttonTextPaint)
+            canvas.drawText("Level: $clickerFireRateLevel", fireButtonRect.centerX(), fireButtonRect.centerY() + 5f, buttonTextPaint)
+            canvas.drawText("Cost: 10 orbs", fireButtonRect.centerX(), fireButtonRect.centerY() + 25f, buttonTextPaint)
+
+            buttonY += buttonHeight + buttonGap
+
+            // Button 3: Speed
+            speedButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+            canvas.drawRoundRect(speedButtonRect, 10f, 10f, buttonBgPaint)
+            canvas.drawRoundRect(speedButtonRect, 10f, 10f, buttonBorderPaint)
+            canvas.drawText("SPD+", speedButtonRect.centerX(), speedButtonRect.centerY() - 15f, buttonTextPaint)
+            canvas.drawText("Level: $clickerSpeedLevel", speedButtonRect.centerX(), speedButtonRect.centerY() + 5f, buttonTextPaint)
+            canvas.drawText("Cost: 10 orbs", speedButtonRect.centerX(), speedButtonRect.centerY() + 25f, buttonTextPaint)
+
+            buttonY += buttonHeight + buttonGap
+
+            // Button 4: HP
+            hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+            canvas.drawRoundRect(hpButtonRect, 10f, 10f, buttonBgPaint)
+            canvas.drawRoundRect(hpButtonRect, 10f, 10f, buttonBorderPaint)
+            canvas.drawText("HP+", hpButtonRect.centerX(), hpButtonRect.centerY() - 15f, buttonTextPaint)
+            canvas.drawText("Level: $clickerHpLevel", hpButtonRect.centerX(), hpButtonRect.centerY() + 5f, buttonTextPaint)
+            canvas.drawText("Cost: 10 orbs", hpButtonRect.centerX(), hpButtonRect.centerY() + 25f, buttonTextPaint)
+        }
+
+        // Settings icon in bottom-left (gear icon)
+        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 35f, pauseBgPaint)
+
+        // Draw gear-like icon
+        val gearPaint = Paint().apply {
+            color = Color.CYAN
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 18f, gearPaint)
+        canvas.drawCircle(settingsIconRect.centerX(), settingsIconRect.centerY(), 8f, gearPaint)
 
         // Joystick in screen space
         if (joyActive) {
@@ -1862,6 +1958,19 @@ class GameView(context: Context) : View(context) {
             val knobX = joyBaseX + joyDx
             val knobY = joyBaseY + joyDy
             canvas.drawCircle(knobX, knobY, joyKnobRadius, joyKnobPaint)
+        }
+
+        // Unpause countdown (3, 2, 1)
+        if (unpauseCountdown > 0) {
+            val countdownPaint = Paint().apply {
+                color = Color.CYAN
+                textSize = 200f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                alpha = (unpauseCountdownAlpha * 255).toInt().coerceIn(0, 255)
+            }
+            canvas.drawText(unpauseCountdown.toString(), w / 2f, h / 2f + 70f, countdownPaint)
         }
 
         // Gacha menu overlay
