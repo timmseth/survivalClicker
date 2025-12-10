@@ -1495,20 +1495,28 @@ class GameView(context: Context) : View(context) {
 
     // Bullet converter functions
     private fun convertAllBulletsToOrbs() {
+        val enemyBullets = bullets.filter { !it.isPlayerBullet }
         for (eb in enemyBullets) {
             greenOrbs.add(GreenOrb(eb.x, eb.y))
         }
-        enemyBullets.clear()
+        bullets.removeAll { !it.isPlayerBullet }
     }
 
     private fun convertAllBulletsToPlayerBullets() {
-        for (eb in enemyBullets) {
-            bullets.add(Bullet(eb.x, eb.y, 0f, -800f))  // Shoot upward
+        // Convert all enemy bullets to player bullets shooting upward
+        for (b in bullets) {
+            if (!b.isPlayerBullet) {
+                b.isPlayerBullet = true
+                b.vx = 0f
+                b.vy = -800f  // Shoot upward
+            }
         }
-        enemyBullets.clear()
     }
 
     private fun convertAllBulletsToHoming() {
+        val enemyBullets = bullets.filter { !it.isPlayerBullet }.toList()
+        bullets.removeAll { !it.isPlayerBullet }
+
         for (eb in enemyBullets) {
             // Find nearest enemy and shoot homing projectile at them
             var nearestEnemy: Enemy? = null
@@ -1525,10 +1533,9 @@ class GameView(context: Context) : View(context) {
                 val dy = nearestEnemy.y - eb.y
                 val len = hypot(dx.toDouble(), dy.toDouble()).toFloat()
                 val speed = 600f
-                bullets.add(Bullet(eb.x, eb.y, (dx / len) * speed, (dy / len) * speed))
+                bullets.add(Bullet(eb.x, eb.y, (dx / len) * speed, (dy / len) * speed, isPlayerBullet = true))
             }
         }
-        enemyBullets.clear()
     }
 
     private fun handleGachaTouch(x: Float, y: Float) {
