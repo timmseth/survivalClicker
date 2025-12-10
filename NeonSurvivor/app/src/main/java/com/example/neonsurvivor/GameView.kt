@@ -394,6 +394,7 @@ class GameView(context: Context) : View(context) {
     private var clickerFireRateLevel = 0
     private var clickerSpeedLevel = 0
     private var clickerHpLevel = 0
+    private var clickerBarrierLevel = 0
 
     // Waves + gacha
     private var wave = 1
@@ -412,6 +413,7 @@ class GameView(context: Context) : View(context) {
     private var fireButtonRect = RectF()
     private var speedButtonRect = RectF()
     private var hpButtonRect = RectF()
+    private var barrierButtonRect = RectF()
 
     enum class UpgradeType {
         // Special upgrades (wave-end rewards)
@@ -926,6 +928,20 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
+            // Barrier damage to enemies - walls deal damage based on barrier level
+            if (clickerBarrierLevel > 0) {
+                for (wall in walls) {
+                    if (e.x - e.radius < wall.x + wall.width &&
+                        e.x + e.radius > wall.x &&
+                        e.y - e.radius < wall.y + wall.height &&
+                        e.y + e.radius > wall.y) {
+                        // Deal damage based on barrier level (10 damage per level per second)
+                        val barrierDamage = clickerBarrierLevel * 10f * dt
+                        e.hp -= barrierDamage
+                    }
+                }
+            }
+
             // Update shoot cooldown
             if (e.shootCooldown > 0f) {
                 e.shootCooldown -= dt
@@ -1355,6 +1371,7 @@ class GameView(context: Context) : View(context) {
             putInt("clicker_fire_rate_level", clickerFireRateLevel)
             putInt("clicker_speed_level", clickerSpeedLevel)
             putInt("clicker_hp_level", clickerHpLevel)
+            putInt("clicker_barrier_level", clickerBarrierLevel)
             apply()
         }
     }
@@ -1376,6 +1393,7 @@ class GameView(context: Context) : View(context) {
             clickerFireRateLevel = prefs.getInt("clicker_fire_rate_level", 0)
             clickerSpeedLevel = prefs.getInt("clicker_speed_level", 0)
             clickerHpLevel = prefs.getInt("clicker_hp_level", 0)
+            clickerBarrierLevel = prefs.getInt("clicker_barrier_level", 0)
 
             // Spawn enemies for current wave using spawnWave()
             spawnWave()
@@ -1593,6 +1611,20 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    // Get ROYGBV color for barrier level
+    private fun getBarrierColor(level: Int): Int {
+        return when (level) {
+            0 -> Color.GRAY  // No upgrade
+            1 -> Color.RED
+            2 -> Color.argb(255, 255, 165, 0)  // Orange
+            3 -> Color.YELLOW
+            4 -> Color.GREEN
+            5 -> Color.BLUE
+            6 -> Color.argb(255, 138, 43, 226)  // Violet
+            else -> Color.MAGENTA  // Beyond max
+        }
+    }
+
     private fun handleGachaTouch(x: Float, y: Float) {
         if (!inGacha || gachaButtonsDisabled) return
         val cardWidth = width * 0.8f
@@ -1678,6 +1710,13 @@ class GameView(context: Context) : View(context) {
                         clickerHpLevel++
                         maxHp += (maxHp * 0.01f).toInt() // +1% permanent
                         playerHp += (maxHp * 0.01f).toInt() // Also heal by the increase
+                        return true
+                    }
+                    barrierButtonRect.contains(x, y) && orbCurrency >= cost && clickerBarrierLevel < 6 -> {
+                        orbCurrency -= cost
+                        clickerBarrierLevel++
+                        // Barrier upgrade increases wall damage and provides protection
+                        // Wall color and power will increase with each level
                         return true
                     }
                 }
@@ -1769,7 +1808,8 @@ class GameView(context: Context) : View(context) {
                         damageButtonRect.contains(x, y) ||
                         fireButtonRect.contains(x, y) ||
                         speedButtonRect.contains(x, y) ||
-                        hpButtonRect.contains(x, y)
+                        hpButtonRect.contains(x, y) ||
+                        barrierButtonRect.contains(x, y)
                     )) ||
                     (currentMenu == "SETTINGS" && (
                         musicToggleRect.contains(x, y) ||
@@ -2028,7 +2068,12 @@ class GameView(context: Context) : View(context) {
             canvas.drawText(icon, p.x, p.y + 10f, powerUpIconPaint)
         }
 
-        // Draw pink walls (using class-level paints)
+        // Draw walls with ROYGBV color progression based on barrier upgrade level
+        val barrierWallColor = getBarrierColor(clickerBarrierLevel)
+        wallPaint.color = barrierWallColor
+        wallBorderPaint.color = barrierWallColor
+        wallBorderPaint.alpha = 255  // Full opacity for border
+
         for (wall in walls) {
             canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallPaint)
             canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallBorderPaint)
@@ -2428,9 +2473,47 @@ class GameView(context: Context) : View(context) {
                         canvas.drawText("Cost: $cost orbs", rect.centerX(), rect.centerY() + 35f, buttonDetailPaint)
                     }
 
-                    // Button 4: HP (at bottom for easy thumb reach)
+                    // Button 5: HP (at bottom for easy thumb reach)
                     hpButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
+                    buttonY -= buttonHeight + buttonGap
+
+                    // Button 4: Barrier (with ROYGBV color progression)
+                    barrierButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    val barrierColor = getBarrierColor(clickerBarrierLevel)
+                    val barrierLabel = when (clickerBarrierLevel) {
+                        0 -> "BARRIER"
+                        1 -> "BARRIER (Red)"
+                        2 -> "BARRIER (Orange)"
+                        3 -> "BARRIER (Yellow)"
+                        4 -> "BARRIER (Green)"
+                        5 -> "BARRIER (Blue)"
+                        6 -> "BARRIER (Violet)"
+                        else -> "BARRIER (MAX)"
+                    }
+                    // Custom draw for barrier button with colored border
+                    val shadowRect = RectF(barrierButtonRect.left + 4f, barrierButtonRect.top + 4f,
+                                          barrierButtonRect.right + 4f, barrierButtonRect.bottom + 4f)
+                    canvas.drawRoundRect(shadowRect, 12f, 12f, buttonShadowPaint)
+                    canvas.drawRoundRect(barrierButtonRect, 12f, 12f, buttonBgPaint)
+                    // Use barrier color for border
+                    val barrierBorderPaint = Paint().apply {
+                        color = barrierColor
+                        style = Paint.Style.STROKE
+                        strokeWidth = 5f
+                        isAntiAlias = true
+                    }
+                    canvas.drawRoundRect(barrierButtonRect, 12f, 12f, barrierBorderPaint)
+                    val barrierTextPaint = Paint().apply {
+                        color = barrierColor
+                        textSize = 42f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    canvas.drawText(barrierLabel, barrierButtonRect.centerX(), barrierButtonRect.centerY() - 20f, barrierTextPaint)
+                    canvas.drawText("Level $clickerBarrierLevel", barrierButtonRect.centerX(), barrierButtonRect.centerY() + 10f, buttonDetailPaint)
+                    canvas.drawText("Cost: 10 orbs", barrierButtonRect.centerX(), barrierButtonRect.centerY() + 35f, buttonDetailPaint)
                     buttonY -= buttonHeight + buttonGap
 
                     // Button 3: Speed
