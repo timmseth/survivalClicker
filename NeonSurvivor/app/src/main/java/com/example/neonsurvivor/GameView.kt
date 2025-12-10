@@ -191,6 +191,34 @@ class GameView(context: Context) : View(context) {
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         isAntiAlias = true
     }
+
+    // Barrier shield paints (reused, only color changes)
+    private val barrierPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        alpha = 180
+        isAntiAlias = true
+    }
+    private val barrierGlowPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        alpha = 100
+        isAntiAlias = true
+        maskFilter = BlurMaskFilter(6f, BlurMaskFilter.Blur.NORMAL)
+    }
+    private val barrierPath = android.graphics.Path()  // Reusable path object
+    private val bulletPath = android.graphics.Path()  // Reusable path for bullet diamonds
+
+    // Boss HP bar paints
+    private val bossHpBarBgPaint = Paint().apply {
+        color = Color.RED
+        style = Paint.Style.FILL
+    }
+    private val bossHpBarFillPaint = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.FILL
+    }
+
     private val currencyPaint = Paint().apply {
         color = Color.GREEN
         textSize = 32f
@@ -2002,16 +2030,15 @@ class GameView(context: Context) : View(context) {
         // Draw bullets with different visuals for player vs enemy
         for (b in bullets) {
             if (b.isPlayerBullet) {
-                // Player bullets - cyan diamonds with glow
+                // Player bullets - cyan diamonds with glow (reuse path)
                 canvas.drawCircle(b.x, b.y, 15f, bulletGlowPaint)
-                val path = Path().apply {
-                    moveTo(b.x, b.y - 8f)
-                    lineTo(b.x + 6f, b.y)
-                    lineTo(b.x, b.y + 8f)
-                    lineTo(b.x - 6f, b.y)
-                    close()
-                }
-                canvas.drawPath(path, bulletPaint)
+                bulletPath.reset()
+                bulletPath.moveTo(b.x, b.y - 8f)
+                bulletPath.lineTo(b.x + 6f, b.y)
+                bulletPath.lineTo(b.x, b.y + 8f)
+                bulletPath.lineTo(b.x - 6f, b.y)
+                bulletPath.close()
+                canvas.drawPath(bulletPath, bulletPaint)
             } else {
                 // Enemy bullets - red circles with glow
                 canvas.drawCircle(b.x, b.y, 10f, enemyBulletGlowPaint)
@@ -2032,23 +2059,15 @@ class GameView(context: Context) : View(context) {
                     val glowRadius = e.getGlowRadius() * 2f
                     canvas.drawCircle(e.x, e.y, bossSize / 2f + glowRadius, enemyGlowPaint)
 
-                    // Draw HP bar for boss (red background, green fill)
+                    // Draw HP bar for boss (using class-level paints)
                     val barWidth = 150f
                     val barHeight = 12f
                     val barX = e.x - barWidth / 2f
                     val barY = e.y - bossSize / 2f - 30f
 
-                    val hpBarBgPaint = Paint().apply {
-                        color = Color.RED
-                        style = Paint.Style.FILL
-                    }
-                    val hpBarFillPaint = Paint().apply {
-                        color = Color.GREEN
-                        style = Paint.Style.FILL
-                    }
-                    canvas.drawRect(barX, barY, barX + barWidth, barY + barHeight, hpBarBgPaint)
+                    canvas.drawRect(barX, barY, barX + barWidth, barY + barHeight, bossHpBarBgPaint)
                     val hpRatio = (e.hp / e.maxHp).coerceIn(0f, 1f)
-                    canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpBarFillPaint)
+                    canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, bossHpBarFillPaint)
 
                     // Draw boss sprite
                     val dstRect = RectF(
@@ -2242,8 +2261,8 @@ class GameView(context: Context) : View(context) {
                     else -> Color.argb(255, 138, 43, 226)  // Violet
                 }
 
-                // Create wavy path for barrier
-                val path = android.graphics.Path()
+                // Create wavy path for barrier (reuse path object)
+                barrierPath.reset()
                 val segments = 36  // Number of points for smooth circle
                 for (i in 0..segments) {
                     val angle = (i / segments.toFloat()) * 2f * Math.PI.toFloat()
@@ -2255,33 +2274,20 @@ class GameView(context: Context) : View(context) {
                     val y = playerY + sin(angle.toDouble()).toFloat() * radius
 
                     if (i == 0) {
-                        path.moveTo(x, y)
+                        barrierPath.moveTo(x, y)
                     } else {
-                        path.lineTo(x, y)
+                        barrierPath.lineTo(x, y)
                     }
                 }
-                path.close()
+                barrierPath.close()
 
-                // Draw the wavy barrier outline
-                val barrierPaint = Paint().apply {
-                    color = layerColor
-                    style = Paint.Style.STROKE
-                    strokeWidth = 4f
-                    alpha = 180
-                    isAntiAlias = true
-                }
-                canvas.drawPath(path, barrierPaint)
+                // Draw the wavy barrier outline (reuse paint, just change color)
+                barrierPaint.color = layerColor
+                canvas.drawPath(barrierPath, barrierPaint)
 
-                // Add inner glow
-                val glowPaint = Paint().apply {
-                    color = layerColor
-                    style = Paint.Style.STROKE
-                    strokeWidth = 2f
-                    alpha = 100
-                    isAntiAlias = true
-                    maskFilter = BlurMaskFilter(6f, BlurMaskFilter.Blur.NORMAL)
-                }
-                canvas.drawPath(path, glowPaint)
+                // Add inner glow (reuse paint, just change color)
+                barrierGlowPaint.color = layerColor
+                canvas.drawPath(barrierPath, barrierGlowPaint)
             }
         }
 
