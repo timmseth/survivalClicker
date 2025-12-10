@@ -637,7 +637,10 @@ class GameView(context: Context) : View(context) {
 
         // Spawn 3-6 random pink wall obstacles per wave
         walls.clear()
-        val wallCount = 3 + rnd.nextInt(4)  // 3-6 walls
+        // Progressive wall count scaling with wave (starts at 2, adds 1 every 3 waves, max 12)
+        val baseWallCount = 2 + (wave / 3).coerceAtMost(10)
+        val wallCount = baseWallCount + rnd.nextInt(2)  // Add 0-1 random walls
+
         for (i in 0 until wallCount) {
             // Random orientation: 50% horizontal, 50% vertical
             val isHorizontal = rnd.nextBoolean()
@@ -652,11 +655,11 @@ class GameView(context: Context) : View(context) {
                 50f + rnd.nextFloat() * 100f  // Vertical: 50-150px tall
             }
 
-            // Try to spawn wall away from player (max 10 attempts)
+            // Try to spawn wall away from player (max 20 attempts for better placement)
             var wx = 0f
             var wy = 0f
             var attempts = 0
-            val minDistFromPlayer = 150f  // Minimum distance from player
+            val minDistFromPlayer = 250f  // Increased safezone from 150f to 250f
 
             do {
                 wx = playerX - width/3f + rnd.nextFloat() * (width * 2f/3f)
@@ -670,10 +673,10 @@ class GameView(context: Context) : View(context) {
 
                 if (distToPlayer >= minDistFromPlayer) break
                 attempts++
-            } while (attempts < 10)
+            } while (attempts < 20)  // Increased from 10 to 20 attempts
 
             // Only add wall if we found a valid position
-            if (attempts < 10) {
+            if (attempts < 20) {
                 walls.add(Wall(wx, wy, wallWidth, wallHeight))
             }
         }
