@@ -130,9 +130,59 @@ class SplashScreenView(context: Context) : View(context) {
         private var startButtonRect = RectF()
         private var settingsButtonRect = RectF()
 
+        // Character selection
+        private var selectedCharacter = 0  // 0=Biker, 1=Punk, 2=Cyborg
+        private val characterNames = listOf("BIKER", "PUNK", "CYBORG")
+        private var characterIdleSprites = mutableListOf<Bitmap>()
+        private var characterRunSprites = mutableListOf<Bitmap>()
+        private var characterAnimFrame = 0
+        private var characterAnimTime = 0f
+        private var isRunning = false  // Alternate between idle and run
+        private var runToggleTime = 0f
+        private var leftArrowRect = RectF()
+        private var rightArrowRect = RectF()
+        private var characterSpotlightRect = RectF()
+
+        private val arrowPaint = Paint().apply {
+            color = Color.CYAN
+            textSize = 80f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(20f, 0f, 0f, Color.CYAN)
+        }
+
+        private val characterNamePaint = Paint().apply {
+            color = Color.YELLOW
+            textSize = 40f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(15f, 0f, 0f, Color.YELLOW)
+        }
+
+        private val spotlightPaint = Paint().apply {
+            color = Color.argb(100, 0, 255, 255)
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+
         init {
             isFocusable = true
             isClickable = true
+
+            // Load character sprites
+            characterIdleSprites.add(BitmapFactory.decodeResource(context.resources, R.drawable.char_biker_idle))
+            characterIdleSprites.add(BitmapFactory.decodeResource(context.resources, R.drawable.char_punk_idle))
+            characterIdleSprites.add(BitmapFactory.decodeResource(context.resources, R.drawable.char_cyborg_idle))
+
+            characterRunSprites.add(BitmapFactory.decodeResource(context.resources, R.drawable.char_biker_run))
+            characterRunSprites.add(BitmapFactory.decodeResource(context.resources, R.drawable.char_punk_run))
+            characterRunSprites.add(BitmapFactory.decodeResource(context.resources, R.drawable.char_cyborg_run))
+
+            // Load saved character selection
+            selectedCharacter = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getInt("selected_character", 0)
 
             // Initialize rain
             for (layer in 0..2) {
@@ -200,6 +250,31 @@ class SplashScreenView(context: Context) : View(context) {
                 buttonCenterX + buttonWidth / 2f,
                 h * 0.75f + buttonHeight
             )
+
+            // Position character spotlight (between SURVIVOR text and START button)
+            val spotlightSize = 200f
+            characterSpotlightRect = RectF(
+                buttonCenterX - spotlightSize / 2f,
+                h * 0.45f,
+                buttonCenterX + spotlightSize / 2f,
+                h * 0.45f + spotlightSize
+            )
+
+            // Position arrow buttons
+            val arrowSize = 80f
+            leftArrowRect = RectF(
+                characterSpotlightRect.left - arrowSize - 20f,
+                characterSpotlightRect.centerY() - arrowSize / 2f,
+                characterSpotlightRect.left - 20f,
+                characterSpotlightRect.centerY() + arrowSize / 2f
+            )
+
+            rightArrowRect = RectF(
+                characterSpotlightRect.right + 20f,
+                characterSpotlightRect.centerY() - arrowSize / 2f,
+                characterSpotlightRect.right + arrowSize + 20f,
+                characterSpotlightRect.centerY() + arrowSize / 2f
+            )
         }
 
         override fun onDraw(canvas: Canvas) {
@@ -227,6 +302,10 @@ class SplashScreenView(context: Context) : View(context) {
 
             // Title
             drawNeonText(canvas, w, h)
+
+            // Character selection
+            updateCharacterAnimation(dt)
+            drawCharacterSelection(canvas)
 
             // Buttons
             drawButtons(canvas)
@@ -320,6 +399,62 @@ class SplashScreenView(context: Context) : View(context) {
             }
         }
 
+        private fun updateCharacterAnimation(dt: Float) {
+            // Toggle between idle and run every 3 seconds
+            runToggleTime += dt
+            if (runToggleTime >= 3f) {
+                runToggleTime = 0f
+                isRunning = !isRunning
+                characterAnimFrame = 0
+            }
+
+            // Update animation frame
+            characterAnimTime += dt
+            val frameDelay = 0.15f  // ~6.7 FPS animation
+            if (characterAnimTime >= frameDelay) {
+                characterAnimTime = 0f
+                val maxFrames = if (isRunning) 6 else 4
+                characterAnimFrame = (characterAnimFrame + 1) % maxFrames
+            }
+        }
+
+        private fun drawCharacterSelection(canvas: Canvas) {
+            // Draw spotlight background
+            canvas.drawOval(characterSpotlightRect, spotlightPaint)
+
+            // Draw character sprite
+            val spriteSheet = if (isRunning) {
+                characterRunSprites[selectedCharacter]
+            } else {
+                characterIdleSprites[selectedCharacter]
+            }
+
+            val totalFrames = if (isRunning) 6 else 4
+            val frameWidth = spriteSheet.width / totalFrames
+            val frameHeight = spriteSheet.height
+
+            val srcRect = Rect(
+                characterAnimFrame * frameWidth,
+                0,
+                (characterAnimFrame + 1) * frameWidth,
+                frameHeight
+            )
+
+            canvas.drawBitmap(spriteSheet, srcRect, characterSpotlightRect, null)
+
+            // Draw character name
+            canvas.drawText(
+                characterNames[selectedCharacter],
+                characterSpotlightRect.centerX(),
+                characterSpotlightRect.bottom + 50f,
+                characterNamePaint
+            )
+
+            // Draw arrows
+            canvas.drawText("<", leftArrowRect.centerX(), leftArrowRect.centerY() + 25f, arrowPaint)
+            canvas.drawText(">", rightArrowRect.centerX(), rightArrowRect.centerY() + 25f, arrowPaint)
+        }
+
         private fun drawButtons(canvas: Canvas) {
             // START button
             canvas.drawRoundRect(startButtonRect, 20f, 20f, buttonBgPaint)
@@ -346,6 +481,30 @@ class SplashScreenView(context: Context) : View(context) {
             if (event.action == MotionEvent.ACTION_UP) {
                 val x = event.x
                 val y = event.y
+
+                // Left arrow - previous character
+                if (leftArrowRect.contains(x, y)) {
+                    selectedCharacter = (selectedCharacter - 1 + 3) % 3
+                    characterAnimFrame = 0
+                    // Save selection
+                    context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                        .edit()
+                        .putInt("selected_character", selectedCharacter)
+                        .apply()
+                    return true
+                }
+
+                // Right arrow - next character
+                if (rightArrowRect.contains(x, y)) {
+                    selectedCharacter = (selectedCharacter + 1) % 3
+                    characterAnimFrame = 0
+                    // Save selection
+                    context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                        .edit()
+                        .putInt("selected_character", selectedCharacter)
+                        .apply()
+                    return true
+                }
 
                 if (startButtonRect.contains(x, y)) {
                     // Start game
