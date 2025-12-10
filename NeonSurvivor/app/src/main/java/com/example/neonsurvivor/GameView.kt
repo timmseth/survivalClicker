@@ -400,6 +400,12 @@ class GameView(context: Context) : View(context) {
     private var clickerHpLevel = 0
     private var clickerBarrierLevel = 0
 
+    // Barrier shield system (personal shield around player)
+    private var barrierShieldLayers = 0  // Current active barrier layers (0 to clickerBarrierLevel)
+    private var barrierRecoveryTimer = 0f  // Timer for recovering barrier layers
+    private val barrierRecoveryDelay = 10f  // 10 seconds without damage to recover 1 layer
+    private var barrierWaveOffset = 0f  // Animation offset for wavy effect
+
     // Waves + gacha
     private var wave = 1
     private var inGacha = false
@@ -791,6 +797,18 @@ class GameView(context: Context) : View(context) {
                     overclockTimer = 0f
                 }
             }
+
+            // Update barrier shield recovery
+            if (barrierShieldLayers < clickerBarrierLevel) {
+                barrierRecoveryTimer += dt
+                if (barrierRecoveryTimer >= barrierRecoveryDelay) {
+                    barrierShieldLayers++
+                    barrierRecoveryTimer = 0f
+                }
+            }
+
+            // Update barrier wave animation
+            barrierWaveOffset += dt * 2f
         }
 
         updateBlood(dt)
@@ -963,41 +981,34 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
-            // Barrier damage to enemies - walls deal damage based on barrier level
-            if (clickerBarrierLevel > 0) {
-                for (wall in walls) {
-                    if (e.x - e.radius < wall.x + wall.width &&
-                        e.x + e.radius > wall.x &&
-                        e.y - e.radius < wall.y + wall.height &&
-                        e.y + e.radius > wall.y) {
-                        // Deal damage based on barrier level (10 damage per level per second)
-                        val barrierDamage = clickerBarrierLevel * 10f * dt
-                        e.hp -= barrierDamage
-                    }
-                }
-            }
-
             // Update shoot cooldown
             if (e.shootCooldown > 0f) {
                 e.shootCooldown -= dt
             }
 
             if (dist < e.radius + playerRadius && damageCooldown <= 0f) {
-                // Shield absorbs damage
+                // Priority: Shield powerup > Barrier shield > HP
                 if (shieldCount > 0) {
                     shieldCount--
                     damageCooldown = 0.5f
+                } else if (barrierShieldLayers > 0) {
+                    // Barrier shield absorbs damage - drop one layer
+                    barrierShieldLayers--
+                    barrierRecoveryTimer = 0f  // Reset recovery timer
+                    triggerDamageFeedback()
+                    damageCooldown = 0.5f
                 } else {
-                    // Increased damage from 15 to 25 per second, but with cooldown
+                    // No shield - take HP damage
                     playerHp -= 25
                     if (playerHp < 0) playerHp = 0
                     tookDamage = true
-                    damageCooldown = 0.5f // Half second between damage ticks
+                    damageCooldown = 0.5f
+                    barrierRecoveryTimer = 0f  // Reset recovery timer when taking HP damage
 
                     // Bullet time activates when hit
                     if (hasBulletTime) {
                         bulletTimeActive = true
-                        bulletTimeTimer = 2f // 2 seconds of slow-mo
+                        bulletTimeTimer = 2f
                     }
                 }
 
@@ -1179,10 +1190,19 @@ class GameView(context: Context) : View(context) {
                 }
 
                 if (dist < playerRadius && damageCooldown <= 0f) {
-                    playerHp -= 15 // Enemy bullets do less damage
-                    if (playerHp < 0) playerHp = 0
-                    triggerDamageFeedback()
-                    damageCooldown = 0.3f
+                    // Barrier shield absorbs bullet damage first
+                    if (barrierShieldLayers > 0) {
+                        barrierShieldLayers--
+                        barrierRecoveryTimer = 0f
+                        triggerDamageFeedback()
+                        damageCooldown = 0.3f
+                    } else {
+                        playerHp -= 15
+                        if (playerHp < 0) playerHp = 0
+                        triggerDamageFeedback()
+                        damageCooldown = 0.3f
+                        barrierRecoveryTimer = 0f
+                    }
                     bulletIt.remove()
 
                     // Trigger hit animation
@@ -1407,6 +1427,7 @@ class GameView(context: Context) : View(context) {
             putInt("clicker_speed_level", clickerSpeedLevel)
             putInt("clicker_hp_level", clickerHpLevel)
             putInt("clicker_barrier_level", clickerBarrierLevel)
+            putInt("barrier_shield_layers", barrierShieldLayers)
             apply()
         }
     }
@@ -1429,6 +1450,7 @@ class GameView(context: Context) : View(context) {
             clickerSpeedLevel = prefs.getInt("clicker_speed_level", 0)
             clickerHpLevel = prefs.getInt("clicker_hp_level", 0)
             clickerBarrierLevel = prefs.getInt("clicker_barrier_level", 0)
+            barrierShieldLayers = prefs.getInt("barrier_shield_layers", 0)
 
             // Spawn enemies for current wave using spawnWave()
             spawnWave()
@@ -1750,8 +1772,8 @@ class GameView(context: Context) : View(context) {
                     barrierButtonRect.contains(x, y) && orbCurrency >= cost && clickerBarrierLevel < 6 -> {
                         orbCurrency -= cost
                         clickerBarrierLevel++
-                        // Barrier upgrade increases wall damage and provides protection
-                        // Wall color and power will increase with each level
+                        // Add a new barrier layer immediately when purchased
+                        barrierShieldLayers = clickerBarrierLevel
                         return true
                     }
                 }
@@ -2144,12 +2166,7 @@ class GameView(context: Context) : View(context) {
             canvas.drawText(icon, p.x, p.y + 10f, powerUpIconPaint)
         }
 
-        // Draw walls with ROYGBV color progression based on barrier upgrade level
-        val barrierWallColor = getBarrierColor(clickerBarrierLevel)
-        wallPaint.color = barrierWallColor
-        wallBorderPaint.color = barrierWallColor
-        wallBorderPaint.alpha = 255  // Full opacity for border
-
+        // Draw walls (pink obstacles)
         for (wall in walls) {
             canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallPaint)
             canvas.drawRect(wall.x, wall.y, wall.x + wall.width, wall.y + wall.height, wallBorderPaint)
@@ -2206,6 +2223,67 @@ class GameView(context: Context) : View(context) {
             playerX + spriteWidth / 2f,
             playerY + spriteHeight / 2f
         )
+
+        // Draw barrier shields (wavy ROYGBV outlines)
+        if (barrierShieldLayers > 0) {
+            for (layer in 0 until barrierShieldLayers) {
+                // Each layer has progressively larger radius
+                val baseRadius = spriteHeight / 2f + 20f
+                val layerRadius = baseRadius + layer * 15f
+
+                // Get color for this layer (cycles through ROYGBV)
+                val layerColor = when (layer % 7) {
+                    0 -> Color.RED
+                    1 -> Color.argb(255, 255, 165, 0)  // Orange
+                    2 -> Color.YELLOW
+                    3 -> Color.GREEN
+                    4 -> Color.CYAN
+                    5 -> Color.BLUE
+                    else -> Color.argb(255, 138, 43, 226)  // Violet
+                }
+
+                // Create wavy path for barrier
+                val path = android.graphics.Path()
+                val segments = 36  // Number of points for smooth circle
+                for (i in 0..segments) {
+                    val angle = (i / segments.toFloat()) * 2f * Math.PI.toFloat()
+                    // Add wave effect with different phase per layer
+                    val wavePhase = barrierWaveOffset + layer * 0.5f
+                    val wave = sin((angle * 4f + wavePhase).toDouble()).toFloat() * 8f
+                    val radius = layerRadius + wave
+                    val x = playerX + cos(angle.toDouble()).toFloat() * radius
+                    val y = playerY + sin(angle.toDouble()).toFloat() * radius
+
+                    if (i == 0) {
+                        path.moveTo(x, y)
+                    } else {
+                        path.lineTo(x, y)
+                    }
+                }
+                path.close()
+
+                // Draw the wavy barrier outline
+                val barrierPaint = Paint().apply {
+                    color = layerColor
+                    style = Paint.Style.STROKE
+                    strokeWidth = 4f
+                    alpha = 180
+                    isAntiAlias = true
+                }
+                canvas.drawPath(path, barrierPaint)
+
+                // Add inner glow
+                val glowPaint = Paint().apply {
+                    color = layerColor
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                    alpha = 100
+                    isAntiAlias = true
+                    maskFilter = BlurMaskFilter(6f, BlurMaskFilter.Blur.NORMAL)
+                }
+                canvas.drawPath(path, glowPaint)
+            }
+        }
 
         // Draw neon glow behind sprite (smaller radius)
         canvas.drawCircle(playerX, playerY, spriteHeight / 2.5f, spriteGlowPaint)
@@ -2558,14 +2636,14 @@ class GameView(context: Context) : View(context) {
                     barrierButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     val barrierColor = getBarrierColor(clickerBarrierLevel)
                     val barrierLabel = when (clickerBarrierLevel) {
-                        0 -> "BARRIER"
-                        1 -> "BARRIER (Red)"
-                        2 -> "BARRIER (Orange)"
-                        3 -> "BARRIER (Yellow)"
-                        4 -> "BARRIER (Green)"
-                        5 -> "BARRIER (Blue)"
-                        6 -> "BARRIER (Violet)"
-                        else -> "BARRIER (MAX)"
+                        0 -> "SHIELD"
+                        1 -> "SHIELD (Red)"
+                        2 -> "SHIELD (Orange)"
+                        3 -> "SHIELD (Yellow)"
+                        4 -> "SHIELD (Green)"
+                        5 -> "SHIELD (Blue)"
+                        6 -> "SHIELD (Violet)"
+                        else -> "SHIELD (MAX)"
                     }
                     // Custom draw for barrier button with colored border
                     val shadowRect = RectF(barrierButtonRect.left + 4f, barrierButtonRect.top + 4f,
