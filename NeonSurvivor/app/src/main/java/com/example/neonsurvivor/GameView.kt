@@ -261,10 +261,9 @@ class GameView(context: Context) : View(context) {
         isAntiAlias = true
     }
 
-    // Player sprite animation
+    // Player sprite animation (loaded based on character selection)
     private val playerIdleSprite: Bitmap
-    private val playerRunSpriteLeft: Bitmap
-    private val playerRunSpriteRight: Bitmap
+    private val playerRunSprite: Bitmap
     private val playerHitSprite: Bitmap
     private val playerDeathSprite: Bitmap
 
@@ -440,6 +439,17 @@ class GameView(context: Context) : View(context) {
     private var gachaButtonsDisabled = false
     private var gachaButtonEnableTimer = 0f
 
+    // QoL: Wave completion feedback
+    private var waveCompleteFeedbackTime = 0f
+    private var completedWaveNumber = 0
+
+    // QoL: Powerup pickup feedback
+    private var powerupPickupFeedback = ""
+    private var powerupFeedbackTime = 0f
+
+    // QoL: Enemy proximity warning
+    private var enemyProximityWarning = false
+
     // Death screen
     private var inDeathScreen = false
     private var deathScreenFadeAlpha = 0f
@@ -477,10 +487,18 @@ class GameView(context: Context) : View(context) {
         // Enable software rendering for blur effects (BlurMaskFilter doesn't work with hardware acceleration)
         setLayerType(LAYER_TYPE_SOFTWARE, null)
 
-        // Load player sprites
-        playerIdleSprite = BitmapFactory.decodeResource(resources, R.drawable.player_idle)
-        playerRunSpriteLeft = BitmapFactory.decodeResource(resources, R.drawable.run_left)
-        playerRunSpriteRight = BitmapFactory.decodeResource(resources, R.drawable.run_right)
+        // Load player sprites based on character selection
+        val selectedCharacter = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .getInt("selected_character", 0)  // 0=Biker, 1=Punk, 2=Cyborg
+
+        val (idleRes, runRes) = when (selectedCharacter) {
+            1 -> Pair(R.drawable.char_punk_idle, R.drawable.char_punk_run)
+            2 -> Pair(R.drawable.char_cyborg_idle, R.drawable.char_cyborg_run)
+            else -> Pair(R.drawable.char_biker_idle, R.drawable.char_biker_run)
+        }
+
+        playerIdleSprite = BitmapFactory.decodeResource(resources, idleRes)
+        playerRunSprite = BitmapFactory.decodeResource(resources, runRes)
         playerHitSprite = BitmapFactory.decodeResource(resources, R.drawable.player_attack) // Using attack as hit
         playerDeathSprite = BitmapFactory.decodeResource(resources, R.drawable.player_death)
 
@@ -851,6 +869,29 @@ class GameView(context: Context) : View(context) {
             }
         }
 
+        // QoL: Update feedback timers
+        if (waveCompleteFeedbackTime > 0f) {
+            waveCompleteFeedbackTime -= dt
+        }
+        if (powerupFeedbackTime > 0f) {
+            powerupFeedbackTime -= dt
+        }
+
+        // QoL: Check enemy proximity for warning
+        enemyProximityWarning = false
+        if (!inGacha) {
+            val dangerRadius = 150f
+            for (e in enemies) {
+                val dx = e.x - playerX
+                val dy = e.y - playerY
+                val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                if (dist < dangerRadius) {
+                    enemyProximityWarning = true
+                    break
+                }
+            }
+        }
+
         if (!inGacha && enemies.isEmpty()) {
             openGacha()
         }
@@ -919,15 +960,15 @@ class GameView(context: Context) : View(context) {
             spriteFrameTime += dt
             if (spriteFrameTime >= frameDelay) {
                 spriteFrameTime = 0f
-                // Run sprite has 8 frames
-                currentFrame = (currentFrame + 1) % 8
+                // Run sprite has 6 frames (horizontal strip)
+                currentFrame = (currentFrame + 1) % 6
             }
         } else {
             spriteFrameTime += dt
             if (spriteFrameTime >= frameDelay) {
                 spriteFrameTime = 0f
-                // Idle sprite has 5 frames
-                currentFrame = (currentFrame + 1) % 5
+                // Idle sprite has 4 frames (horizontal strip)
+                currentFrame = (currentFrame + 1) % 4
             }
         }
 
@@ -1376,30 +1417,34 @@ class GameView(context: Context) : View(context) {
                     p.y += -(dy / dist) * pullSpeed * dt
                 } else {
                     // Collected - apply power-up
-                    when (p.type) {
-                        PowerUpType.SPREAD_SHOT -> hasSpreadShot = true
-                        PowerUpType.RAPID_FIRE -> hasRapidFire = true
-                        PowerUpType.PIERCING -> hasPiercing = true
-                        PowerUpType.HOMING -> hasHoming = true
-                        PowerUpType.SPEED_BOOST -> speedBoostStacks++
-                        PowerUpType.GIANT_BULLETS -> hasGiantBullets = true
-                        PowerUpType.BOUNCY_SHOTS -> hasBouncyShots = true
-                        PowerUpType.EXPLOSIVE_ROUNDS -> hasExplosiveRounds = true
-                        PowerUpType.VAMPIRE -> vampireStacks++
-                        PowerUpType.SHIELD -> shieldCount++
+                    val powerupName = when (p.type) {
+                        PowerUpType.SPREAD_SHOT -> { hasSpreadShot = true; "SPREAD SHOT" }
+                        PowerUpType.RAPID_FIRE -> { hasRapidFire = true; "RAPID FIRE" }
+                        PowerUpType.PIERCING -> { hasPiercing = true; "PIERCING" }
+                        PowerUpType.HOMING -> { hasHoming = true; "HOMING" }
+                        PowerUpType.SPEED_BOOST -> { speedBoostStacks++; "SPEED BOOST" }
+                        PowerUpType.GIANT_BULLETS -> { hasGiantBullets = true; "GIANT BULLETS" }
+                        PowerUpType.BOUNCY_SHOTS -> { hasBouncyShots = true; "BOUNCY SHOTS" }
+                        PowerUpType.EXPLOSIVE_ROUNDS -> { hasExplosiveRounds = true; "EXPLOSIVE ROUNDS" }
+                        PowerUpType.VAMPIRE -> { vampireStacks++; "VAMPIRE" }
+                        PowerUpType.SHIELD -> { shieldCount++; "SHIELD" }
                         PowerUpType.MAGNET -> {
                             hasMagnet = true
                             // Collect all orbs on the map instantly
                             val orbsCollected = greenOrbs.size
                             orbCurrency += orbsCollected
                             greenOrbs.clear()
+                            "MAGNET"
                         }
-                        PowerUpType.BULLET_TIME -> hasBulletTime = true
-                        PowerUpType.ORBITAL -> hasOrbital = true
-                        PowerUpType.LASER_SIGHT -> hasLaserSight = true
-                        PowerUpType.MULTISHOT -> multishotStacks++
-                        PowerUpType.SHOCKWAVE -> hasShockwave = true
+                        PowerUpType.BULLET_TIME -> { hasBulletTime = true; "BULLET TIME" }
+                        PowerUpType.ORBITAL -> { hasOrbital = true; "ORBITAL" }
+                        PowerUpType.LASER_SIGHT -> { hasLaserSight = true; "LASER SIGHT" }
+                        PowerUpType.MULTISHOT -> { multishotStacks++; "MULTISHOT" }
+                        PowerUpType.SHOCKWAVE -> { hasShockwave = true; "SHOCKWAVE" }
                     }
+                    // QoL: Trigger pickup feedback
+                    powerupPickupFeedback = powerupName
+                    powerupFeedbackTime = 1.5f
                     it.remove()
                 }
             } else if (p.y > playerY + height / 2f + 100f) {
@@ -1575,6 +1620,10 @@ class GameView(context: Context) : View(context) {
 
     private fun openGacha() {
         inGacha = true
+
+        // QoL: Trigger wave completion feedback
+        completedWaveNumber = wave
+        waveCompleteFeedbackTime = 2f  // Show for 2 seconds
 
         // Disable buttons for 1 second to prevent accidental clicks
         gachaButtonsDisabled = true
@@ -2203,37 +2252,61 @@ class GameView(context: Context) : View(context) {
         // Choose sprite based on state (death > hit > movement)
         val spriteSheet: Bitmap
         val totalFrames: Int
+        val isHorizontalStrip: Boolean
         when {
             isDying -> {
                 spriteSheet = playerDeathSprite
                 totalFrames = 5 // Death animation frames
+                isHorizontalStrip = false // Vertical strip
             }
             isPlayingHitAnimation -> {
                 spriteSheet = playerHitSprite
                 totalFrames = 2 // Hit animation frames (player_attack.png used as hit)
+                isHorizontalStrip = false // Vertical strip
             }
             isMoving -> {
-                // Select correct sprite based on facing direction
-                spriteSheet = if (playerFacingLeft) playerRunSpriteLeft else playerRunSpriteRight
-                totalFrames = 8
+                // Character sprites are horizontal strips
+                spriteSheet = playerRunSprite
+                totalFrames = 6
+                isHorizontalStrip = true
             }
             else -> {
+                // Character sprites are horizontal strips
                 spriteSheet = playerIdleSprite
-                totalFrames = 5
+                totalFrames = 4
+                isHorizontalStrip = true
             }
         }
 
-        // Calculate frame size (sprites are vertical strip)
-        val frameWidth = spriteSheet.width
-        val frameHeight = spriteSheet.height / totalFrames
+        // Calculate frame size based on sprite orientation
+        val frameWidth: Int
+        val frameHeight: Int
+        if (isHorizontalStrip) {
+            // Horizontal strip: width divided by frames, height is full
+            frameWidth = spriteSheet.width / totalFrames
+            frameHeight = spriteSheet.height
+        } else {
+            // Vertical strip: width is full, height divided by frames
+            frameWidth = spriteSheet.width
+            frameHeight = spriteSheet.height / totalFrames
+        }
 
         // Source rect for current frame
-        val srcRect = Rect(
-            0,
-            currentFrame * frameHeight,
-            frameWidth,
-            (currentFrame + 1) * frameHeight
-        )
+        val srcRect = if (isHorizontalStrip) {
+            Rect(
+                currentFrame * frameWidth,
+                0,
+                (currentFrame + 1) * frameWidth,
+                frameHeight
+            )
+        } else {
+            Rect(
+                0,
+                currentFrame * frameHeight,
+                frameWidth,
+                (currentFrame + 1) * frameHeight
+            )
+        }
 
         // Destination rect (where to draw on screen)
         val dstRect = RectF(
@@ -2294,7 +2367,15 @@ class GameView(context: Context) : View(context) {
         // Draw neon glow behind sprite (smaller radius)
         canvas.drawCircle(playerX, playerY, spriteHeight / 2.5f, spriteGlowPaint)
 
-        canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
+        // Flip sprite horizontally when facing left (only for horizontal character sprites)
+        if (isHorizontalStrip && playerFacingLeft) {
+            canvas.save()
+            canvas.scale(-1f, 1f, playerX, playerY)
+            canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
+            canvas.restore()
+        } else {
+            canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
+        }
 
         // Restore canvas from camera and screen shake
         canvas.restore()
@@ -2319,6 +2400,52 @@ class GameView(context: Context) : View(context) {
             setShadowLayer(4f, 2f, 2f, Color.BLACK)
         }
         canvas.drawText("Wave $wave", 30f, barY + barHeight + 55f, waveTextPaint)
+
+        // QoL: Wave completion feedback (big centered text)
+        if (waveCompleteFeedbackTime > 0f) {
+            val alpha = (waveCompleteFeedbackTime * 255f).toInt().coerceIn(0, 255)
+            val scale = if (waveCompleteFeedbackTime > 1.5f) {
+                // First 0.5s: scale up from 0.5 to 1.0
+                0.5f + (2f - waveCompleteFeedbackTime) * 1f
+            } else {
+                1f
+            }
+            val waveCompletePaint = Paint().apply {
+                color = Color.argb(alpha, 0, 255, 255)
+                textSize = 80f * scale
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                setShadowLayer(20f, 0f, 0f, Color.argb(alpha, 0, 255, 255))
+            }
+            canvas.drawText("WAVE $completedWaveNumber COMPLETE!", w / 2f, h / 3f, waveCompletePaint)
+        }
+
+        // QoL: Powerup pickup feedback (top-center)
+        if (powerupFeedbackTime > 0f) {
+            val alpha = (powerupFeedbackTime * 255f).toInt().coerceIn(0, 255)
+            val yOffset = (1.5f - powerupFeedbackTime) * 30f  // Floats upward
+            val pickupPaint = Paint().apply {
+                color = Color.argb(alpha, 255, 215, 0)  // Gold color
+                textSize = 40f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                setShadowLayer(15f, 0f, 0f, Color.argb(alpha, 255, 215, 0))
+            }
+            canvas.drawText("+ $powerupPickupFeedback", w / 2f, 150f - yOffset, pickupPaint)
+        }
+
+        // QoL: Enemy proximity warning (pulsing red border)
+        if (enemyProximityWarning && !inGacha) {
+            val pulseAlpha = ((sin(System.currentTimeMillis() / 200.0) + 1.0) / 2.0 * 100).toInt()
+            val warningPaint = Paint().apply {
+                color = Color.argb(pulseAlpha, 255, 0, 0)
+                style = Paint.Style.STROKE
+                strokeWidth = 10f
+            }
+            canvas.drawRect(5f, 5f, w - 5f, h - 5f, warningPaint)
+        }
 
         // Draw flyout menus (slides in from right)
         if (menuSlideProgress > 0.01f) {
