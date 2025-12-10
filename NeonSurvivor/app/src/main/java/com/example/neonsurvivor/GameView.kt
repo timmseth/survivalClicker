@@ -355,6 +355,7 @@ class GameView(context: Context) : View(context) {
             EnemyType.SQUARE -> 0.20f      // 20%
             EnemyType.PENTAGON -> 0.25f    // 25%
             EnemyType.HEXAGON -> 0.35f     // 35% - rare and tough
+            EnemyType.BOSS_FLYING_EYE, EnemyType.BOSS_GOBLIN, EnemyType.BOSS_MUSHROOM, EnemyType.BOSS_SKELETON -> 1.0f  // 100% - bosses always drop
         }
     }
 
