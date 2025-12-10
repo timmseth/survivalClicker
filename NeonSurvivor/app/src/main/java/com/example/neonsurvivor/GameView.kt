@@ -2142,6 +2142,66 @@ class GameView(context: Context) : View(context) {
                     // Settings menu with all controls
                     canvas.drawText("SETTINGS", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
 
+                    // Active Upgrades Display Section
+                    val upgradeTitlePaint = Paint().apply {
+                        color = Color.CYAN
+                        textSize = 36f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    val upgradeTextPaint = Paint().apply {
+                        color = Color.argb(255, 100, 255, 150)
+                        textSize = 24f
+                        textAlign = Paint.Align.LEFT
+                        isAntiAlias = true
+                    }
+                    val upgradeBoxPaint = Paint().apply {
+                        color = Color.argb(100, 0, 100, 100)
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    val upgradeBoxBorderPaint = Paint().apply {
+                        color = Color.CYAN
+                        style = Paint.Style.STROKE
+                        strokeWidth = 3f
+                        isAntiAlias = true
+                    }
+
+                    var upgradeYPos = 140f
+                    val upgradeBoxLeft = menuLeft + 20f
+                    val upgradeBoxRight = menuLeft + menuWidth - 20f
+
+                    // Collect active upgrades
+                    val activeUpgrades = mutableListOf<String>()
+                    if (hasStasisCore) activeUpgrades.add("Stasis Core - Bullets slow enemies")
+                    if (overclockActive) activeUpgrades.add("Overclocker - 2x fire rate (${overclockTimer.toInt()}s)")
+                    else if (overclockTimer > 0f && !overclockActive) activeUpgrades.add("Overclocker (ready)")
+                    if (hasQuantumMirror) activeUpgrades.add("Quantum Mirror - Graze reflect")
+                    if (hasFragmentDrive) activeUpgrades.add("Fragment Drive - Kill fragments")
+
+                    if (activeUpgrades.isNotEmpty()) {
+                        canvas.drawText("ACTIVE UPGRADES", menuLeft + menuWidth / 2f, upgradeYPos, upgradeTitlePaint)
+                        upgradeYPos += 15f
+
+                        for (upgrade in activeUpgrades) {
+                            val boxHeight = 40f
+                            val upgradeBox = RectF(upgradeBoxLeft, upgradeYPos, upgradeBoxRight, upgradeYPos + boxHeight)
+                            canvas.drawRoundRect(upgradeBox, 8f, 8f, upgradeBoxPaint)
+                            canvas.drawRoundRect(upgradeBox, 8f, 8f, upgradeBoxBorderPaint)
+                            canvas.drawText(upgrade, upgradeBoxLeft + 10f, upgradeYPos + 27f, upgradeTextPaint)
+                            upgradeYPos += boxHeight + 8f
+                        }
+                        upgradeYPos += 20f
+                    } else {
+                        canvas.drawText("ACTIVE UPGRADES", menuLeft + menuWidth / 2f, upgradeYPos, upgradeTitlePaint)
+                        upgradeYPos += 15f
+                        upgradeTextPaint.textAlign = Paint.Align.CENTER
+                        canvas.drawText("(None - beat waves for upgrades!)", menuLeft + menuWidth / 2f, upgradeYPos + 20f, upgradeTextPaint)
+                        upgradeTextPaint.textAlign = Paint.Align.LEFT
+                        upgradeYPos += 60f
+                    }
+
                     val labelPaint = Paint().apply {
                         color = Color.WHITE
                         textSize = 32f
@@ -2169,7 +2229,7 @@ class GameView(context: Context) : View(context) {
                     }
 
                     val padding = 30f
-                    var yPos = 160f
+                    var yPos = upgradeYPos  // Start after upgrades display
                     val toggleWidth = 120f
                     val toggleHeight = 50f
 
