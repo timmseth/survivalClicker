@@ -2534,6 +2534,102 @@ class GameView(context: Context) : View(context) {
                         upgradeYPos += 60f
                     }
 
+                    // Stat Tracker Table
+                    canvas.drawText("STATS", menuLeft + menuWidth / 2f, upgradeYPos, upgradeTitlePaint)
+                    upgradeYPos += 10f
+
+                    val statTablePaint = Paint().apply {
+                        color = Color.WHITE
+                        textSize = 20f
+                        isAntiAlias = true
+                    }
+                    val statHeaderPaint = Paint().apply {
+                        color = Color.CYAN
+                        textSize = 20f
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    val statValuePaint = Paint().apply {
+                        color = Color.argb(255, 100, 255, 150)
+                        textSize = 20f
+                        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+                        isAntiAlias = true
+                    }
+
+                    // Calculate all stat modifiers
+                    val damageBase = clickerDamageLevel.toFloat()
+                    val damageModifier = 0f // No current modifiers for damage
+                    val damageTotal = damageBase + damageModifier
+
+                    val fireRateBase = clickerFireRateLevel * 0.25f + 1f
+                    val fireRateModifier = (if (hasRapidFire) fireRateBase * 0.5f else 0f) +
+                                          (if (overclockActive) fireRateBase else 0f)
+                    val fireRateTotal = fireRateBase + fireRateModifier
+                    val fireRatePercent = if (fireRateBase > 0) ((fireRateModifier / fireRateBase) * 100).toInt() else 0
+
+                    val speedBase = 250f
+                    val speedModifier = speedBoostStacks * 0.10f * speedBase
+                    val speedTotal = speedBase + speedModifier
+                    val speedPercent = if (speedBase > 0) ((speedModifier / speedBase) * 100).toInt() else 0
+
+                    val hpBase = clickerHpLevel * 50f + 100f
+                    val hpModifier = 0f // No current modifiers for HP
+                    val hpTotal = hpBase + hpModifier
+
+                    val multishotBase = 1
+                    val multishotModifier = multishotStacks
+                    val multishotTotal = multishotBase + multishotModifier
+                    val multishotPercent = if (multishotBase > 0) ((multishotModifier.toFloat() / multishotBase) * 100).toInt() else 0
+
+                    val barrierLayers = barrierShieldLayers
+                    val barrierMax = clickerBarrierLevel
+
+                    // Draw table header
+                    val col1X = menuLeft + 30f
+                    val col2X = menuLeft + menuWidth * 0.35f
+                    val col3X = menuLeft + menuWidth * 0.58f
+                    val col4X = menuLeft + menuWidth * 0.80f
+                    val rowHeight = 28f
+
+                    canvas.drawText("STAT", col1X, upgradeYPos, statHeaderPaint)
+                    canvas.drawText("BASE", col2X, upgradeYPos, statHeaderPaint)
+                    canvas.drawText("MOD", col3X, upgradeYPos, statHeaderPaint)
+                    canvas.drawText("TOTAL", col4X, upgradeYPos, statHeaderPaint)
+                    upgradeYPos += rowHeight
+
+                    // Draw table rows
+                    fun drawStatRow(name: String, base: String, mod: String, total: String) {
+                        canvas.drawText(name, col1X, upgradeYPos, statTablePaint)
+                        canvas.drawText(base, col2X, upgradeYPos, statValuePaint)
+                        canvas.drawText(mod, col3X, upgradeYPos, statValuePaint)
+                        canvas.drawText(total, col4X, upgradeYPos, statValuePaint)
+                        upgradeYPos += rowHeight
+                    }
+
+                    drawStatRow("Damage", damageBase.toInt().toString(),
+                                if (damageModifier > 0) "+${damageModifier.toInt()}" else "-",
+                                damageTotal.toInt().toString())
+
+                    drawStatRow("Fire Rate", String.format("%.2f", fireRateBase),
+                                if (fireRatePercent > 0) "+$fireRatePercent%" else "-",
+                                String.format("%.2f", fireRateTotal))
+
+                    drawStatRow("Speed", speedBase.toInt().toString(),
+                                if (speedPercent > 0) "+$speedPercent%" else "-",
+                                speedTotal.toInt().toString())
+
+                    drawStatRow("Max HP", hpBase.toInt().toString(),
+                                if (hpModifier > 0) "+${hpModifier.toInt()}" else "-",
+                                hpTotal.toInt().toString())
+
+                    drawStatRow("Multishot", multishotBase.toString(),
+                                if (multishotPercent > 0) "+$multishotPercent%" else "-",
+                                multishotTotal.toString())
+
+                    drawStatRow("Barriers", "$barrierLayers/$barrierMax", "-", "$barrierLayers/$barrierMax")
+
+                    upgradeYPos += 15f
+
                     val labelPaint = Paint().apply {
                         color = Color.WHITE
                         textSize = 32f
