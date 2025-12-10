@@ -745,6 +745,15 @@ class GameView(context: Context) : View(context) {
             updatePowerUps(dt)
             handleAutoFire(dt)
             handleEnemyShooting(dt)
+
+            // Update Overclocker timer
+            if (overclockActive) {
+                overclockTimer -= dt
+                if (overclockTimer <= 0f) {
+                    overclockActive = false
+                    overclockTimer = 0f
+                }
+            }
         }
 
         updateBlood(dt)
@@ -1014,6 +1023,23 @@ class GameView(context: Context) : View(context) {
             }
 
             if (b.isPlayerBullet) {
+                // Stasis Core - player bullets slow enemy bullets in radius
+                if (hasStasisCore) {
+                    val slowRadius = 100f
+                    val slowFactor = 0.5f  // Slow to 50% speed
+                    for (eb in bullets) {
+                        if (!eb.isPlayerBullet) {
+                            val dx = eb.x - b.x
+                            val dy = eb.y - b.y
+                            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                            if (dist < slowRadius) {
+                                eb.vx *= slowFactor
+                                eb.vy *= slowFactor
+                            }
+                        }
+                    }
+                }
+
                 // Player bullet - check enemy hits
                 var hitEnemy: Enemy? = null
                 for (e in enemies) {
@@ -1070,15 +1096,37 @@ class GameView(context: Context) : View(context) {
                             }
                         }
 
+                        // Fragment Drive - spawn 4 micro-projectiles on kill
+                        if (hasFragmentDrive) {
+                            val fragmentSpeed = 400f
+                            for (i in 0 until 4) {
+                                val angle = (i * 90f + 45f) * (Math.PI / 180f).toFloat()  // 45, 135, 225, 315 degrees
+                                val vx = cos(angle) * fragmentSpeed
+                                val vy = sin(angle) * fragmentSpeed
+                                bullets.add(Bullet(hitEnemy.x, hitEnemy.y, vx, vy, true))
+                            }
+                        }
+
                         enemies.remove(hitEnemy)
                         killCount++
                     }
                 }
             } else {
-                // Enemy bullet - check player hit
+                // Enemy bullet - check player hit and graze
                 val dx = b.x - playerX
                 val dy = b.y - playerY
                 val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+
+                // Quantum Mirror - reflect bullets that graze player (within 1.5x radius but not hitting)
+                if (hasQuantumMirror && dist < playerRadius * 1.5f && dist >= playerRadius) {
+                    // Reflect bullet away from player
+                    val nx = dx / dist
+                    val ny = dy / dist
+                    val speed = hypot(b.vx.toDouble(), b.vy.toDouble()).toFloat()
+                    b.vx = nx * speed
+                    b.vy = ny * speed
+                }
+
                 if (dist < playerRadius && damageCooldown <= 0f) {
                     playerHp -= 15 // Enemy bullets do less damage
                     if (playerHp < 0) playerHp = 0
@@ -1156,7 +1204,11 @@ class GameView(context: Context) : View(context) {
                     }
                 }
 
-                val actualFireRate = if (hasRapidFire) fireRate * 1.5f else fireRate
+                var actualFireRate = if (hasRapidFire) fireRate * 1.5f else fireRate
+                // Overclocker - 2x fire rate for 5 seconds
+                if (overclockActive) {
+                    actualFireRate *= 2f
+                }
                 fireCooldown = 1f / actualFireRate
             }
         }
