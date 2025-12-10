@@ -242,6 +242,7 @@ class GameView(context: Context) : View(context) {
 
     // Enemy sprites - 27 individual sprites loaded from split folder
     private val enemySprites = mutableMapOf<Int, Bitmap>()
+    private val bossSprites = mutableMapOf<EnemyType, Bitmap>()
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
@@ -319,7 +320,7 @@ class GameView(context: Context) : View(context) {
         style = Paint.Style.FILL
     }
 
-    enum class EnemyType { CIRCLE, TRIANGLE, SQUARE, PENTAGON, HEXAGON }
+    enum class EnemyType { CIRCLE, TRIANGLE, SQUARE, PENTAGON, HEXAGON, BOSS_FLYING_EYE, BOSS_GOBLIN, BOSS_MUSHROOM, BOSS_SKELETON }
 
     data class Enemy(
         var x: Float,
@@ -331,7 +332,8 @@ class GameView(context: Context) : View(context) {
         val type: EnemyType,
         var shootCooldown: Float = 0f,
         var animFrame: Int = 0,
-        var animTime: Float = 0f
+        var animTime: Float = 0f,
+        val isBoss: Boolean = false
     ) {
         fun getCornerCount(): Int = when(type) {
             EnemyType.CIRCLE -> 0
@@ -339,6 +341,7 @@ class GameView(context: Context) : View(context) {
             EnemyType.SQUARE -> 4
             EnemyType.PENTAGON -> 5
             EnemyType.HEXAGON -> 6
+            EnemyType.BOSS_FLYING_EYE, EnemyType.BOSS_GOBLIN, EnemyType.BOSS_MUSHROOM, EnemyType.BOSS_SKELETON -> 0  // Bosses don't shoot bullets
         }
 
         fun getGlowRadius(): Float {
@@ -454,6 +457,12 @@ class GameView(context: Context) : View(context) {
                 enemySprites[i] = BitmapFactory.decodeResource(resources, resourceId)
             }
         }
+
+        // Load boss sprites
+        bossSprites[EnemyType.BOSS_FLYING_EYE] = BitmapFactory.decodeResource(resources, R.drawable.boss_flyingeye)
+        bossSprites[EnemyType.BOSS_GOBLIN] = BitmapFactory.decodeResource(resources, R.drawable.boss_goblin)
+        bossSprites[EnemyType.BOSS_MUSHROOM] = BitmapFactory.decodeResource(resources, R.drawable.boss_mushroom)
+        bossSprites[EnemyType.BOSS_SKELETON] = BitmapFactory.decodeResource(resources, R.drawable.boss_skeleton)
     }
 
     fun pause() {
@@ -571,6 +580,7 @@ class GameView(context: Context) : View(context) {
 
         val rnd = Random(System.currentTimeMillis())
         val isBreatherWave = wave % 5 == 0 && wave > 0
+        val isBossWave = wave % 5 == 0 && wave > 0  // Spawn boss every 5 waves
 
         // Logarithmic scaling with soft cap at MAX_ENEMIES
         val baseCount = 8 + (wave * 3f) / (1f + wave * 0.05f)
@@ -635,6 +645,30 @@ class GameView(context: Context) : View(context) {
             }
 
             enemies.add(enemy)
+        }
+
+        // Spawn boss every 5 waves
+        if (isBossWave) {
+            // Choose boss type based on wave number (cycle through bosses)
+            val bossType = when ((wave / 5) % 4) {
+                0 -> EnemyType.BOSS_FLYING_EYE
+                1 -> EnemyType.BOSS_GOBLIN
+                2 -> EnemyType.BOSS_MUSHROOM
+                else -> EnemyType.BOSS_SKELETON
+            }
+
+            // Spawn boss in center-ish area
+            val bossX = playerX + (rnd.nextFloat() - 0.5f) * 200f
+            val bossY = playerY - height/2f - 100f  // Spawn above player
+
+            // Boss stats: massive HP, slower speed, larger size
+            val bossHp = 200f + wave * 50f  // Scales heavily with wave
+            val bossSpeed = 40f  // Slow moving
+            val bossRadius = 48f  // 2x larger than normal enemies
+
+            val boss = Enemy(bossX, bossY, bossRadius, bossSpeed, bossHp, bossHp, bossType, isBoss = true)
+            enemies.add(boss)
+            guaranteedDropEnemies.add(boss)  // Bosses always drop loot
         }
 
         // Spawn 3-6 random pink wall obstacles per wave
@@ -1964,6 +1998,47 @@ class GameView(context: Context) : View(context) {
 
         // Draw enemies with animated sprites using individual sprite files
         for (e in enemies) {
+            // Check if this is a boss - render differently
+            if (e.isBoss) {
+                val bossBitmap = bossSprites[e.type]
+                if (bossBitmap != null) {
+                    // Draw boss much larger
+                    val bossSize = 120f  // 2x larger than regular enemies
+
+                    // Draw massive glow behind boss
+                    val glowRadius = e.getGlowRadius() * 2f
+                    canvas.drawCircle(e.x, e.y, bossSize / 2f + glowRadius, enemyGlowPaint)
+
+                    // Draw HP bar for boss (red background, green fill)
+                    val barWidth = 150f
+                    val barHeight = 12f
+                    val barX = e.x - barWidth / 2f
+                    val barY = e.y - bossSize / 2f - 30f
+
+                    val hpBarBgPaint = Paint().apply {
+                        color = Color.RED
+                        style = Paint.Style.FILL
+                    }
+                    val hpBarFillPaint = Paint().apply {
+                        color = Color.GREEN
+                        style = Paint.Style.FILL
+                    }
+                    canvas.drawRect(barX, barY, barX + barWidth, barY + barHeight, hpBarBgPaint)
+                    val hpRatio = (e.hp / e.maxHp).coerceIn(0f, 1f)
+                    canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, hpBarFillPaint)
+
+                    // Draw boss sprite
+                    val dstRect = RectF(
+                        e.x - bossSize / 2f,
+                        e.y - bossSize / 2f,
+                        e.x + bossSize / 2f,
+                        e.y + bossSize / 2f
+                    )
+                    canvas.drawBitmap(bossBitmap, null, dstRect, spritePaint)
+                }
+                continue  // Skip normal enemy rendering
+            }
+
             // Row 1 character (Blue-hooded) - CIRCLE
             //   moving down = 1,4,7
             //   moving left = 2,5,8
