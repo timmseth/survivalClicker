@@ -6,6 +6,9 @@ import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Persistent crash logging utility for debugging
+ */
 object CrashLogger {
 
     private var logFile: File? = null
