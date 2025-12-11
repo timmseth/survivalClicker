@@ -450,6 +450,18 @@ class GameView(context: Context) : View(context) {
     // QoL: Enemy proximity warning
     private var enemyProximityWarning = false
 
+    // Debug logging system
+    private val debugLogs = mutableListOf<String>()
+    private val maxDebugLogs = 100  // Keep last 100 logs
+    private fun addDebugLog(message: String) {
+        val timestamp = System.currentTimeMillis()
+        val logEntry = "[Wave $wave] $message"
+        debugLogs.add(logEntry)
+        if (debugLogs.size > maxDebugLogs) {
+            debugLogs.removeAt(0)
+        }
+    }
+
     // Death screen
     private var inDeathScreen = false
     private var deathScreenFadeAlpha = 0f
@@ -629,11 +641,15 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun spawnWave() {
+        addDebugLog("Spawning wave $wave")
         enemies.clear()
 
         val rnd = Random(System.currentTimeMillis())
         val isBreatherWave = wave % 5 == 0 && wave > 0
         val isBossWave = wave % 5 == 0 && wave > 0  // Spawn boss every 5 waves
+        if (isBossWave) {
+            addDebugLog("Boss wave!")
+        }
 
         // Logarithmic scaling with soft cap at MAX_ENEMIES
         val baseCount = 8 + (wave * 3f) / (1f + wave * 0.05f)
@@ -2283,12 +2299,12 @@ class GameView(context: Context) : View(context) {
         val frameHeight: Int
         if (isHorizontalStrip) {
             // Horizontal strip: width divided by frames, height is full
-            frameWidth = spriteSheet.width / totalFrames
+            frameWidth = if (totalFrames > 0) spriteSheet.width / totalFrames else spriteSheet.width
             frameHeight = spriteSheet.height
         } else {
             // Vertical strip: width is full, height divided by frames
             frameWidth = spriteSheet.width
-            frameHeight = spriteSheet.height / totalFrames
+            frameHeight = if (totalFrames > 0) spriteSheet.height / totalFrames else spriteSheet.height
         }
 
         // Source rect for current frame
@@ -2317,7 +2333,7 @@ class GameView(context: Context) : View(context) {
             // Character sprites: scale based on actual frame size
             // Slightly larger size (140px height) for better visibility
             val targetHeight = 140f
-            val aspectRatio = frameWidth.toFloat() / frameHeight.toFloat()
+            val aspectRatio = if (frameHeight > 0) frameWidth.toFloat() / frameHeight.toFloat() else 1f
             actualSpriteHeight = targetHeight
             actualSpriteWidth = targetHeight * aspectRatio
         } else {
@@ -2389,17 +2405,21 @@ class GameView(context: Context) : View(context) {
         canvas.drawCircle(playerX, playerY, actualSpriteHeight / 2.5f, spriteGlowPaint)
 
         // Draw sprite with proper flipping for horizontal character sprites
-        if (isHorizontalStrip && playerFacingLeft) {
-            // Flip sprite horizontally by scaling canvas
-            canvas.save()
-            // Translate to player position, flip, then translate back
-            canvas.translate(playerX, playerY)
-            canvas.scale(-1f, 1f)
-            canvas.translate(-playerX, -playerY)
-            canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
-            canvas.restore()
-        } else {
-            canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
+        try {
+            if (isHorizontalStrip && playerFacingLeft) {
+                // Flip sprite horizontally by scaling canvas
+                canvas.save()
+                // Translate to player position, flip, then translate back
+                canvas.translate(playerX, playerY)
+                canvas.scale(-1f, 1f)
+                canvas.translate(-playerX, -playerY)
+                canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
+                canvas.restore()
+            } else {
+                canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
+            }
+        } catch (e: Exception) {
+            addDebugLog("Sprite draw error: ${e.message}, frames=$totalFrames, w=$frameWidth, h=$frameHeight")
         }
 
         // Restore canvas from camera and screen shake
@@ -2800,6 +2820,25 @@ class GameView(context: Context) : View(context) {
                     canvas.drawText("LOAD", loadButtonRect.centerX(), loadButtonRect.centerY() + 10f, loadTextPaint)
 
                     labelPaint.textAlign = Paint.Align.LEFT
+                    yPos += buttonHeight + 30f
+
+                    // Debug Logs Section
+                    canvas.drawText("DEBUG LOGS (last ${debugLogs.size})", menuLeft + menuWidth / 2f, yPos, upgradeTitlePaint)
+                    yPos += 30f
+
+                    val debugTextPaint = Paint().apply {
+                        color = Color.argb(200, 150, 150, 150)
+                        textSize = 16f
+                        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+                        isAntiAlias = true
+                    }
+
+                    // Show last 10 debug logs
+                    val logsToShow = debugLogs.takeLast(10)
+                    for (log in logsToShow) {
+                        canvas.drawText(log, menuLeft + padding, yPos, debugTextPaint)
+                        yPos += 20f
+                    }
                 }
                 "UPGRADES" -> {
                     // Upgrades menu (existing clicker UI)
