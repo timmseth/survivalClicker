@@ -2315,8 +2315,8 @@ class GameView(context: Context) : View(context) {
 
         if (isHorizontalStrip) {
             // Character sprites: scale based on actual frame size
-            // Target size: maintain aspect ratio but scale to ~192px height
-            val targetHeight = 192f
+            // Target size: smaller than before (120px height instead of 192px)
+            val targetHeight = 120f
             val aspectRatio = frameWidth.toFloat() / frameHeight.toFloat()
             actualSpriteHeight = targetHeight
             actualSpriteWidth = targetHeight * aspectRatio
@@ -2384,10 +2384,14 @@ class GameView(context: Context) : View(context) {
         // Draw neon glow behind sprite (smaller radius)
         canvas.drawCircle(playerX, playerY, actualSpriteHeight / 2.5f, spriteGlowPaint)
 
-        // Flip sprite horizontally when facing left (only for horizontal character sprites)
+        // Draw sprite with proper flipping for horizontal character sprites
         if (isHorizontalStrip && playerFacingLeft) {
+            // Flip sprite horizontally by scaling canvas
             canvas.save()
-            canvas.scale(-1f, 1f, playerX, playerY)
+            // Translate to player position, flip, then translate back
+            canvas.translate(playerX, playerY)
+            canvas.scale(-1f, 1f)
+            canvas.translate(-playerX, -playerY)
             canvas.drawBitmap(spriteSheet, srcRect, dstRect, spritePaint)
             canvas.restore()
         } else {
