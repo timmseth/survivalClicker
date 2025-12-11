@@ -2309,18 +2309,35 @@ class GameView(context: Context) : View(context) {
         }
 
         // Destination rect (where to draw on screen)
+        // Use actual frame dimensions scaled to match old sprite size
+        val actualSpriteWidth: Float
+        val actualSpriteHeight: Float
+
+        if (isHorizontalStrip) {
+            // Character sprites: scale based on actual frame size
+            // Target size: maintain aspect ratio but scale to ~192px height
+            val targetHeight = 192f
+            val aspectRatio = frameWidth.toFloat() / frameHeight.toFloat()
+            actualSpriteHeight = targetHeight
+            actualSpriteWidth = targetHeight * aspectRatio
+        } else {
+            // Old sprites: use hardcoded values
+            actualSpriteWidth = spriteWidth
+            actualSpriteHeight = spriteHeight
+        }
+
         val dstRect = RectF(
-            playerX - spriteWidth / 2f,
-            playerY - spriteHeight / 2f,
-            playerX + spriteWidth / 2f,
-            playerY + spriteHeight / 2f
+            playerX - actualSpriteWidth / 2f,
+            playerY - actualSpriteHeight / 2f,
+            playerX + actualSpriteWidth / 2f,
+            playerY + actualSpriteHeight / 2f
         )
 
         // Draw barrier shields (wavy ROYGBV outlines)
         if (barrierShieldLayers > 0) {
             for (layer in 0 until barrierShieldLayers) {
                 // Each layer has progressively larger radius
-                val baseRadius = spriteHeight / 2f + 20f
+                val baseRadius = actualSpriteHeight / 2f + 20f
                 val layerRadius = baseRadius + layer * 15f
 
                 // Get color for this layer (cycles through ROYGBV)
@@ -2365,7 +2382,7 @@ class GameView(context: Context) : View(context) {
         }
 
         // Draw neon glow behind sprite (smaller radius)
-        canvas.drawCircle(playerX, playerY, spriteHeight / 2.5f, spriteGlowPaint)
+        canvas.drawCircle(playerX, playerY, actualSpriteHeight / 2.5f, spriteGlowPaint)
 
         // Flip sprite horizontally when facing left (only for horizontal character sprites)
         if (isHorizontalStrip && playerFacingLeft) {
