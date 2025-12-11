@@ -2315,8 +2315,8 @@ class GameView(context: Context) : View(context) {
 
         if (isHorizontalStrip) {
             // Character sprites: scale based on actual frame size
-            // Target size: smaller than before (120px height instead of 192px)
-            val targetHeight = 120f
+            // Slightly larger size (140px height) for better visibility
+            val targetHeight = 140f
             val aspectRatio = frameWidth.toFloat() / frameHeight.toFloat()
             actualSpriteHeight = targetHeight
             actualSpriteWidth = targetHeight * aspectRatio
@@ -2326,11 +2326,15 @@ class GameView(context: Context) : View(context) {
             actualSpriteHeight = spriteHeight
         }
 
+        // Adjust position for character sprites to account for sprite padding/offset
+        val offsetX = if (isHorizontalStrip) 0f else 0f  // Horizontal centering
+        val offsetY = if (isHorizontalStrip) 10f else 0f  // Shift down slightly (sprite content is higher than center)
+
         val dstRect = RectF(
-            playerX - actualSpriteWidth / 2f,
-            playerY - actualSpriteHeight / 2f,
-            playerX + actualSpriteWidth / 2f,
-            playerY + actualSpriteHeight / 2f
+            playerX - actualSpriteWidth / 2f + offsetX,
+            playerY - actualSpriteHeight / 2f + offsetY,
+            playerX + actualSpriteWidth / 2f + offsetX,
+            playerY + actualSpriteHeight / 2f + offsetY
         )
 
         // Draw barrier shields (wavy ROYGBV outlines)
