@@ -2327,8 +2327,8 @@ class GameView(context: Context) : View(context) {
         }
 
         // Adjust position for character sprites to account for sprite padding/offset
-        val offsetX = if (isHorizontalStrip) 0f else 0f  // Horizontal centering
-        val offsetY = if (isHorizontalStrip) 10f else 0f  // Shift down slightly (sprite content is higher than center)
+        val offsetX = if (isHorizontalStrip) 20f else 0f  // Shift right (sprite content is left of center)
+        val offsetY = if (isHorizontalStrip) -20f else 0f  // Shift up (sprite content is below center)
 
         val dstRect = RectF(
             playerX - actualSpriteWidth / 2f + offsetX,
