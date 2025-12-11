@@ -30,6 +30,10 @@ class GameView(context: Context) : View(context) {
     private var countdownValue: Int = 0
     private var countdownAlpha: Float = 0f
 
+    // Health check logging
+    private var healthCheckTimer = 0f
+    private val healthCheckInterval = 5f  // Log every 5 seconds
+
     // Vibration
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
@@ -585,6 +589,7 @@ class GameView(context: Context) : View(context) {
                 h / 2f + tabSize + tabGap / 2f
             )
 
+            CrashLogger.log("GameView initialized. Starting wave 1")
             spawnWave()
 
             // Start audio
@@ -642,6 +647,7 @@ class GameView(context: Context) : View(context) {
 
     private fun spawnWave() {
         addDebugLog("Spawning wave $wave")
+        CrashLogger.log("spawnWave() called for wave $wave. Current enemies: ${enemies.size}, bullets: ${bullets.size}")
         enemies.clear()
 
         val rnd = Random(System.currentTimeMillis())
@@ -649,6 +655,7 @@ class GameView(context: Context) : View(context) {
         val isBossWave = wave % 5 == 0 && wave > 0  // Spawn boss every 5 waves
         if (isBossWave) {
             addDebugLog("Boss wave!")
+            CrashLogger.log("Boss wave detected for wave $wave")
         }
 
         // Logarithmic scaling with soft cap at MAX_ENEMIES
@@ -793,6 +800,13 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun update(dt: Float) {
+        // Periodic health check logging
+        healthCheckTimer += dt
+        if (healthCheckTimer >= healthCheckInterval) {
+            healthCheckTimer = 0f
+            CrashLogger.log("Health check - Wave: $wave, HP: $playerHp, Kills: $killCount, Enemies: ${enemies.size}, Bullets: ${bullets.size}, hasFragmentDrive: $hasFragmentDrive, inGacha: $inGacha")
+        }
+
         // Handle menu slide animation
         val targetSlideProgress = if (currentMenu != null) 1f else 0f
         menuSlideProgress += (targetSlideProgress - menuSlideProgress) * 10f * dt
@@ -909,6 +923,7 @@ class GameView(context: Context) : View(context) {
         }
 
         if (!inGacha && enemies.isEmpty()) {
+            CrashLogger.log("Wave $wave complete - opening gacha. Enemies: ${enemies.size}, Bullets: ${bullets.size}")
             openGacha()
         }
     }
@@ -1086,6 +1101,7 @@ class GameView(context: Context) : View(context) {
                     // No shield - take HP damage
                     playerHp -= 25
                     if (playerHp < 0) playerHp = 0
+                    CrashLogger.log("Player hit by enemy collision! HP: $playerHp, Enemy type: ${e.type}")
                     tookDamage = true
                     damageCooldown = 0.5f
                     barrierRecoveryTimer = 0f  // Reset recovery timer when taking HP damage
@@ -1246,12 +1262,14 @@ class GameView(context: Context) : View(context) {
                         // Fragment Drive - spawn 4 micro-projectiles on kill
                         if (hasFragmentDrive) {
                             val fragmentSpeed = 400f
+                            val beforeCount = bullets.size
                             for (i in 0 until 4) {
                                 val angle = (i * 90f + 45f) * (Math.PI / 180f).toFloat()  // 45, 135, 225, 315 degrees
                                 val vx = cos(angle) * fragmentSpeed
                                 val vy = sin(angle) * fragmentSpeed
                                 bullets.add(Bullet(hitEnemy.x, hitEnemy.y, vx, vy, true))
                             }
+                            CrashLogger.log("Fragment Drive spawned 4 bullets at (${hitEnemy.x}, ${hitEnemy.y}). Bullets: $beforeCount -> ${bullets.size}")
                         }
 
                         enemies.remove(hitEnemy)
@@ -1284,6 +1302,7 @@ class GameView(context: Context) : View(context) {
                     } else {
                         playerHp -= 15
                         if (playerHp < 0) playerHp = 0
+                        CrashLogger.log("Player hit by enemy bullet! HP: $playerHp")
                         triggerDamageFeedback()
                         damageCooldown = 0.3f
                         barrierRecoveryTimer = 0f
@@ -1635,11 +1654,13 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun openGacha() {
+        CrashLogger.log("openGacha() called - Wave $wave")
         inGacha = true
 
         // QoL: Trigger wave completion feedback
         completedWaveNumber = wave
         waveCompleteFeedbackTime = 2f  // Show for 2 seconds
+        CrashLogger.log("Wave complete feedback set for wave $completedWaveNumber")
 
         // Disable buttons for 1 second to prevent accidental clicks
         gachaButtonsDisabled = true
@@ -1683,37 +1704,47 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun applyUpgrade(option: UpgradeOption) {
+        CrashLogger.log("Applying upgrade: ${option.name} (${option.type})")
         when (option.type) {
             UpgradeType.STASIS_CORE -> {
                 hasStasisCore = true
+                CrashLogger.log("Stasis Core activated")
             }
             UpgradeType.OVERCLOCKER -> {
                 overclockActive = true
                 overclockTimer = 5f  // 5 seconds
+                CrashLogger.log("Overclocker activated")
             }
             UpgradeType.QUANTUM_MIRROR -> {
                 hasQuantumMirror = true
+                CrashLogger.log("Quantum Mirror activated")
             }
             UpgradeType.FRAGMENT_DRIVE -> {
                 hasFragmentDrive = true
+                CrashLogger.log("Fragment Drive activated")
             }
             UpgradeType.CONVERT_TO_ORBS -> {
+                CrashLogger.log("Converting bullets to orbs. Bullet count: ${bullets.size}")
                 convertAllBulletsToOrbs()
             }
             UpgradeType.CONVERT_TO_BULLETS -> {
+                CrashLogger.log("Converting bullets to player bullets. Bullet count: ${bullets.size}")
                 convertAllBulletsToPlayerBullets()
             }
             UpgradeType.CONVERT_TO_HOMING -> {
+                CrashLogger.log("Converting bullets to homing. Bullet count: ${bullets.size}, Enemy count: ${enemies.size}")
                 convertAllBulletsToHoming()
             }
         }
         wave += 1
+        CrashLogger.log("Wave incremented to $wave, spawning new wave")
         spawnWave()
         inGacha = false
 
         // Start countdown like settings menu
         countdownValue = 3
         countdownAlpha = 1f
+        CrashLogger.log("Upgrade applied successfully, countdown started")
     }
 
     // Bullet converter functions

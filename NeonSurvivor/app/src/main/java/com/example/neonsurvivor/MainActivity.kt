@@ -12,6 +12,19 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize crash logger
+        CrashLogger.init(this)
+        CrashLogger.log("MainActivity onCreate")
+
+        // Set up global exception handler
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            CrashLogger.logError("CRASH", "Uncaught exception in thread: ${thread.name}", throwable)
+            CrashLogger.log("Log file saved to: ${CrashLogger.getLogPath()}")
+
+            // Call the default handler to properly crash the app
+            Thread.getDefaultUncaughtExceptionHandler()?.uncaughtException(thread, throwable)
+        }
+
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility =
             (View.SYSTEM_UI_FLAG_FULLSCREEN

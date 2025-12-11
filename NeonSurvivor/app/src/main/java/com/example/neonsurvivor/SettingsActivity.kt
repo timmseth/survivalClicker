@@ -87,6 +87,7 @@ class SettingsView(context: Context) : View(context) {
     private var rainVolumeSliderRect = RectF()
     private var saveButtonRect = RectF()
     private var loadButtonRect = RectF()
+    private var viewLogButtonRect = RectF()
     private var backButtonRect = RectF()
 
     private var draggingMusicSlider = false
@@ -168,6 +169,14 @@ class SettingsView(context: Context) : View(context) {
             h * 0.73f + buttonHeight
         )
 
+        // View Log button (centered below save/load)
+        viewLogButtonRect = RectF(
+            w * 0.25f,
+            h * 0.85f,
+            w * 0.75f,
+            h * 0.85f + 80f
+        )
+
         // Back button
         val buttonWidth = w * 0.7f
         val backButtonHeight = 120f
@@ -175,9 +184,9 @@ class SettingsView(context: Context) : View(context) {
 
         backButtonRect = RectF(
             buttonCenterX - buttonWidth / 2f,
-            h * 0.87f,
+            h * 0.94f,
             buttonCenterX + buttonWidth / 2f,
-            h * 0.87f + backButtonHeight
+            h * 0.94f + backButtonHeight
         )
     }
 
@@ -291,6 +300,24 @@ class SettingsView(context: Context) : View(context) {
         canvas.drawRoundRect(loadButtonRect, 15f, 15f, loadBorderPaint)
         canvas.drawText("LOAD", loadButtonRect.centerX(), loadButtonRect.centerY() + 15f, loadTextPaint)
 
+        // View Log button
+        val logButtonPaint = Paint().apply {
+            color = Color.YELLOW
+            textSize = 35f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        val logBorderPaint = Paint().apply {
+            color = Color.YELLOW
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(viewLogButtonRect, 15f, 15f, buttonBgPaint)
+        canvas.drawRoundRect(viewLogButtonRect, 15f, 15f, logBorderPaint)
+        canvas.drawText("VIEW CRASH LOG", viewLogButtonRect.centerX(), viewLogButtonRect.centerY() + 12f, logButtonPaint)
+
         // Back button
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBgPaint)
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBorderPaint)
@@ -375,6 +402,20 @@ class SettingsView(context: Context) : View(context) {
                             gamePrefs.edit().putBoolean("trigger_load", true).apply()
                             (context as Activity).finish()
                         }
+                        return true
+                    }
+                    viewLogButtonRect.contains(x, y) -> {
+                        // Show crash log in a dialog
+                        val logContents = CrashLogger.getLogContents()
+                        val logPath = CrashLogger.getLogPath()
+                        android.app.AlertDialog.Builder(context)
+                            .setTitle("Crash Log")
+                            .setMessage("Log file: $logPath\n\n$logContents")
+                            .setPositiveButton("OK", null)
+                            .setNeutralButton("Clear Log") { _, _ ->
+                                CrashLogger.clearLog()
+                            }
+                            .show()
                         return true
                     }
                     backButtonRect.contains(x, y) -> {
