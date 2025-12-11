@@ -252,7 +252,7 @@ class SplashScreenView(context: Context) : View(context) {
             )
 
             // Position character spotlight (between SURVIVOR text and START button)
-            val spotlightSize = 200f
+            val spotlightSize = 280f  // Increased from 200f for better visibility
             characterSpotlightRect = RectF(
                 buttonCenterX - spotlightSize / 2f,
                 h * 0.45f,
@@ -440,7 +440,18 @@ class SplashScreenView(context: Context) : View(context) {
                 frameHeight
             )
 
-            canvas.drawBitmap(spriteSheet, srcRect, characterSpotlightRect, null)
+            // Apply same centering offset as in-game (sprite content is bottom-left of frame)
+            val offsetX = 20f  // Shift right
+            val offsetY = -20f  // Shift up
+
+            val adjustedRect = RectF(
+                characterSpotlightRect.left + offsetX,
+                characterSpotlightRect.top + offsetY,
+                characterSpotlightRect.right + offsetX,
+                characterSpotlightRect.bottom + offsetY
+            )
+
+            canvas.drawBitmap(spriteSheet, srcRect, adjustedRect, null)
 
             // Draw character name
             canvas.drawText(
