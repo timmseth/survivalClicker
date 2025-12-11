@@ -1704,7 +1704,7 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun applyUpgrade(option: UpgradeOption) {
-        CrashLogger.log("Applying upgrade: ${option.name} (${option.type})")
+        CrashLogger.log("Applying upgrade: ${option.label} (${option.type})")
         when (option.type) {
             UpgradeType.STASIS_CORE -> {
                 hasStasisCore = true
