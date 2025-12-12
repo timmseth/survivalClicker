@@ -16,11 +16,15 @@ object CrashLogger {
 
     fun init(ctx: Context) {
         context = ctx
-        logFile = File(ctx.getExternalFilesDir(null), "game_crash_log.txt")
+
+        // Try external files dir first, fallback to internal files dir
+        val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+        logFile = File(dir, "game_crash_log.txt")
 
         // Add session separator
         log("========================================")
         log("NEW SESSION STARTED")
+        log("Log file: ${logFile?.absolutePath}")
         log("========================================")
     }
 

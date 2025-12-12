@@ -197,11 +197,11 @@ class SettingsView(context: Context) : View(context) {
         )
 
         // Debug menu controls
-        val toggleWidth = 150f
-        val toggleHeight = 60f
+        val debugToggleWidth = 150f
+        val debugToggleHeight = 60f
         godModeToggleRect = RectF(
             w * 0.6f, h * 0.30f,
-            w * 0.6f + toggleWidth, h * 0.30f + toggleHeight
+            w * 0.6f + debugToggleWidth, h * 0.30f + debugToggleHeight
         )
 
         val buttonSize = 60f
