@@ -2242,7 +2242,16 @@ class GameView(context: Context) : View(context) {
                     val hpRatio = (e.hp / e.maxHp).coerceIn(0f, 1f)
                     canvas.drawRect(barX, barY, barX + barWidth * hpRatio, barY + barHeight, bossHpBarFillPaint)
 
-                    // Draw boss sprite
+                    // Determine if boss should be flipped based on player position
+                    val dx = playerX - e.x
+                    val flipHorizontal = dx > 0  // Flip when player is to the right
+
+                    // Draw boss sprite with directional flipping
+                    if (flipHorizontal) {
+                        canvas.save()
+                        canvas.scale(-1f, 1f, e.x, e.y)
+                    }
+
                     val dstRect = RectF(
                         e.x - bossSize / 2f,
                         e.y - bossSize / 2f,
@@ -2250,6 +2259,10 @@ class GameView(context: Context) : View(context) {
                         e.y + bossSize / 2f
                     )
                     canvas.drawBitmap(bossBitmap, null, dstRect, spritePaint)
+
+                    if (flipHorizontal) {
+                        canvas.restore()
+                    }
                 }
                 continue  // Skip normal enemy rendering
             }
