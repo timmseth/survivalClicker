@@ -1184,6 +1184,9 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun updateBullets(dt: Float) {
+        // Temporary list for bullets spawned during iteration (Fragment Drive)
+        val newBullets = mutableListOf<Bullet>()
+
         val bulletIt = bullets.iterator()
         while (bulletIt.hasNext()) {
             val b = bulletIt.next()
@@ -1300,14 +1303,14 @@ class GameView(context: Context) : View(context) {
                         // Fragment Drive - spawn 4 micro-projectiles on kill
                         if (hasFragmentDrive) {
                             val fragmentSpeed = 400f
-                            val beforeCount = bullets.size
                             for (i in 0 until 4) {
                                 val angle = (i * 90f + 45f) * (Math.PI / 180f).toFloat()  // 45, 135, 225, 315 degrees
                                 val vx = cos(angle) * fragmentSpeed
                                 val vy = sin(angle) * fragmentSpeed
-                                bullets.add(Bullet(hitEnemy.x, hitEnemy.y, vx, vy, true))
+                                // Add to temporary list to avoid ConcurrentModificationException
+                                newBullets.add(Bullet(hitEnemy.x, hitEnemy.y, vx, vy, true))
                             }
-                            CrashLogger.log("Fragment Drive spawned 4 bullets at (${hitEnemy.x}, ${hitEnemy.y}). Bullets: $beforeCount -> ${bullets.size}")
+                            CrashLogger.log("Fragment Drive queued 4 bullets at (${hitEnemy.x}, ${hitEnemy.y})")
                         }
 
                         enemies.remove(hitEnemy)
@@ -1358,6 +1361,12 @@ class GameView(context: Context) : View(context) {
                     }
                 }
             }
+        }
+
+        // Add all queued bullets from Fragment Drive after iteration completes
+        if (newBullets.isNotEmpty()) {
+            bullets.addAll(newBullets)
+            CrashLogger.log("Fragment Drive added ${newBullets.size} new bullets. Total bullets: ${bullets.size}")
         }
     }
 
