@@ -2474,7 +2474,7 @@ class GameView(context: Context) : View(context) {
             playerY + actualSpriteHeight / 2f + offsetY
         )
 
-        // Draw barrier shields (wavy ROYGBV outlines)
+        // Draw Prismatic Barrier (wavy ROYGBV outlines)
         if (barrierShieldLayers > 0) {
             for (layer in 0 until barrierShieldLayers) {
                 // Each layer has progressively larger radius
@@ -3046,18 +3046,18 @@ class GameView(context: Context) : View(context) {
                     drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
                     buttonY -= buttonHeight + buttonGap
 
-                    // Button 4: Barrier (with ROYGBV color progression)
+                    // Button 4: Prismatic Barrier (with ROYGBV color progression)
                     barrierButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     val barrierColor = getBarrierColor(clickerBarrierLevel)
                     val barrierLabel = when (clickerBarrierLevel) {
-                        0 -> "SHIELD"
-                        1 -> "SHIELD (Red)"
-                        2 -> "SHIELD (Orange)"
-                        3 -> "SHIELD (Yellow)"
-                        4 -> "SHIELD (Green)"
-                        5 -> "SHIELD (Blue)"
-                        6 -> "SHIELD (Violet)"
-                        else -> "SHIELD (MAX)"
+                        0 -> "P.BARRIER"
+                        1 -> "P.BARRIER (Red)"
+                        2 -> "P.BARRIER (Orange)"
+                        3 -> "P.BARRIER (Yellow)"
+                        4 -> "P.BARRIER (Green)"
+                        5 -> "P.BARRIER (Blue)"
+                        6 -> "P.BARRIER (Violet)"
+                        else -> "P.BARRIER (MAX)"
                     }
                     // Custom draw for barrier button with colored border
                     val shadowRect = RectF(barrierButtonRect.left + 4f, barrierButtonRect.top + 4f,
