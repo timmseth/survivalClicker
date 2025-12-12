@@ -167,6 +167,14 @@ class SplashScreenView(context: Context) : View(context) {
             isAntiAlias = true
         }
 
+        private val kofiPaint = Paint().apply {
+            color = Color.argb(180, 100, 100, 100)  // Subtle gray
+            textSize = 24f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            isAntiAlias = true
+        }
+
         init {
             isFocusable = true
             isClickable = true
@@ -485,6 +493,16 @@ class SplashScreenView(context: Context) : View(context) {
                 settingsButtonRect.centerX(),
                 settingsButtonRect.centerY() + 20f,
                 buttonTextPaint
+            )
+
+            // Ko-fi link at bottom
+            val w = width.toFloat()
+            val h = height.toFloat()
+            canvas.drawText(
+                "Support on Ko-fi: timmseth",
+                w / 2f,
+                h - 40f,
+                kofiPaint
             )
         }
 
