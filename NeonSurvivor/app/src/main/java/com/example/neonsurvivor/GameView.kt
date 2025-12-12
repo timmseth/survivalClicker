@@ -34,6 +34,10 @@ class GameView(context: Context) : View(context) {
     private var healthCheckTimer = 0f
     private val healthCheckInterval = 5f  // Log every 5 seconds
 
+    // Crash error display
+    private var crashError: Throwable? = null
+    private var crashErrorText: String = ""
+
     // Vibration
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
@@ -3318,5 +3322,64 @@ class GameView(context: Context) : View(context) {
             }
             canvas.drawText(countdownValue.toString(), w / 2f, h / 2f + 70f, countdownPaint)
         }
+
+        // Draw crash error overlay (if crashed)
+        if (crashError != null) {
+            // Semi-transparent red background
+            val crashBgPaint = Paint().apply {
+                color = Color.argb(240, 40, 0, 0)
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(0f, 0f, w, h, crashBgPaint)
+
+            // Error title
+            val titlePaint = Paint().apply {
+                color = Color.RED
+                textSize = 50f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("CRASH DETECTED", w / 2f, 100f, titlePaint)
+
+            // Error message
+            val msgPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 24f
+                textAlign = Paint.Align.LEFT
+                typeface = Typeface.MONOSPACE
+                isAntiAlias = true
+            }
+
+            var yPos = 200f
+            val lines = crashErrorText.split("\n")
+            for (line in lines.take(30)) { // Show first 30 lines
+                canvas.drawText(line, 40f, yPos, msgPaint)
+                yPos += 30f
+            }
+
+            // Screenshot hint
+            val hintPaint = Paint().apply {
+                color = Color.YELLOW
+                textSize = 28f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("TAKE SCREENSHOT NOW!", w / 2f, h - 100f, hintPaint)
+            canvas.drawText("Log: ${CrashLogger.getLogPath()}", w / 2f, h - 60f, hintPaint)
+        }
+    }
+
+    fun showCrashError(error: Throwable) {
+        crashError = error
+        crashErrorText = buildString {
+            append("${error.javaClass.simpleName}: ${error.message}\n\n")
+            append("Stack trace:\n")
+            error.stackTrace.take(20).forEach { element ->
+                append("  at $element\n")
+            }
+        }
+        invalidate()
     }
 }

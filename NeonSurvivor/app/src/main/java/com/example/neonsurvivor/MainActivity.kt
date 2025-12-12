@@ -17,12 +17,29 @@ class MainActivity : Activity() {
         CrashLogger.log("MainActivity onCreate")
 
         // Set up global exception handler
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            CrashLogger.logError("CRASH", "Uncaught exception in thread: ${thread.name}", throwable)
-            CrashLogger.log("Log file saved to: ${CrashLogger.getLogPath()}")
+            try {
+                CrashLogger.logError("CRASH", "Uncaught exception in thread: ${thread.name}", throwable)
+                CrashLogger.log("Log file saved to: ${CrashLogger.getLogPath()}")
 
-            // Call the default handler to properly crash the app
-            Thread.getDefaultUncaughtExceptionHandler()?.uncaughtException(thread, throwable)
+                // Try to display error on screen
+                runOnUiThread {
+                    try {
+                        gameView.showCrashError(throwable)
+                    } catch (e: Exception) {
+                        // Ignore if we can't show the error
+                    }
+                }
+
+                // Give time for logging to complete
+                Thread.sleep(500)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // Call the original default handler to properly crash the app
+            defaultHandler?.uncaughtException(thread, throwable)
         }
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
