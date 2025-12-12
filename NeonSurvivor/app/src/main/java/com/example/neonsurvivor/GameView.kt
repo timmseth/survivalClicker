@@ -1431,12 +1431,12 @@ class GameView(context: Context) : View(context) {
                 // Calculate number of shots (base + multishot stacks)
                 val totalShots = 1 + multishotStacks
 
-                // Calculate gun positions (perpendicular to firing direction)
+                // Calculate gun positions (all fire from near player center)
                 val gunOffsets = mutableListOf<Pair<Float, Float>>()
                 if (gunCount == 1) {
                     gunOffsets.add(Pair(0f, 0f))  // Single gun at center
                 } else {
-                    val gunSpacing = 25f  // Spacing between guns
+                    val gunSpacing = 5f  // Minimal spacing - all guns fire from near center
                     val perpX = -ny  // Perpendicular to direction
                     val perpY = nx
                     for (i in 0 until gunCount) {
