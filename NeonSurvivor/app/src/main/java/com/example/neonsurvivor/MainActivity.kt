@@ -16,29 +16,29 @@ class MainActivity : Activity() {
         CrashLogger.init(this)
         CrashLogger.log("MainActivity onCreate")
 
-        // Set up global exception handler
+        // Set up global exception handler - SIMPLE AND RELIABLE
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                CrashLogger.logError("CRASH", "Uncaught exception in thread: ${thread.name}", throwable)
-                CrashLogger.log("Log file saved to: ${CrashLogger.getLogPath()}")
-
-                // Try to display error on screen
-                runOnUiThread {
-                    try {
-                        gameView.showCrashError(throwable)
-                    } catch (e: Exception) {
-                        // Ignore if we can't show the error
-                    }
+                // Log the crash - this MUST complete
+                CrashLogger.log("========================================")
+                CrashLogger.log("FATAL CRASH DETECTED")
+                CrashLogger.log("Thread: ${thread.name}")
+                CrashLogger.log("Exception: ${throwable.javaClass.simpleName}")
+                CrashLogger.log("Message: ${throwable.message}")
+                CrashLogger.log("Stack trace:")
+                throwable.stackTrace.forEach { element ->
+                    CrashLogger.log("  at $element")
                 }
-
-                // Give time for logging to complete
-                Thread.sleep(500)
+                CrashLogger.log("Log saved to: ${CrashLogger.getLogPath()}")
+                CrashLogger.log("========================================")
             } catch (e: Exception) {
+                // If logging fails, print to stderr
+                System.err.println("CRASH LOGGER FAILED!")
                 e.printStackTrace()
             }
 
-            // Call the original default handler to properly crash the app
+            // Let the system handle the crash
             defaultHandler?.uncaughtException(thread, throwable)
         }
 

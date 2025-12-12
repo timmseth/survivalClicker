@@ -30,9 +30,10 @@ class GameView(context: Context) : View(context) {
     private var countdownValue: Int = 0
     private var countdownAlpha: Float = 0f
 
-    // Health check logging
+    // Health check logging - AGGRESSIVE
     private var healthCheckTimer = 0f
-    private val healthCheckInterval = 5f  // Log every 5 seconds
+    private val healthCheckInterval = 2f  // Log every 2 seconds
+    private var updateCallCount = 0L
 
     // Crash error display
     private var crashError: Throwable? = null
@@ -813,14 +814,18 @@ class GameView(context: Context) : View(context) {
             playerHp = maxHp
         }
         inGacha = false
+
+        CrashLogger.log("spawnWave() COMPLETED for wave $wave. Final enemy count: ${enemies.size}, walls: ${walls.size}")
     }
 
     private fun update(dt: Float) {
-        // Periodic health check logging
+        updateCallCount++
+
+        // AGGRESSIVE logging every 2 seconds
         healthCheckTimer += dt
         if (healthCheckTimer >= healthCheckInterval) {
             healthCheckTimer = 0f
-            CrashLogger.log("Health check - Wave: $wave, HP: $playerHp, Kills: $killCount, Enemies: ${enemies.size}, Bullets: ${bullets.size}, hasFragmentDrive: $hasFragmentDrive, inGacha: $inGacha")
+            CrashLogger.log("HEARTBEAT #$updateCallCount - Wave: $wave, HP: $playerHp/$maxPlayerHp, Kills: $killCount, Enemies: ${enemies.size}, Bullets: ${bullets.size}, PowerUps: ${powerUps.size}, inGacha: $inGacha")
         }
 
         // Handle menu slide animation
