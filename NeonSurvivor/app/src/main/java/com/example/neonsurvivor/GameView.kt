@@ -1104,17 +1104,9 @@ class GameView(context: Context) : View(context) {
 
             if (dist < e.radius + playerRadius && damageCooldown <= 0f) {
                 if (godMode) {
-                    // God mode: deal massive damage to enemy instead
+                    // God mode: deal massive damage to enemy to instantly kill them
                     e.hp -= 9999
-                    if (e.hp <= 0) {
-                        e.active = false
-                        killCount++
-
-                        // Spawn XP orb
-                        if (xpOrbs.size < MAX_XP_ORBS) {
-                            xpOrbs.add(XpOrb(e.x, e.y, 5f))
-                        }
-                    }
+                    // Enemy will be removed by normal enemy cleanup code
                 } else {
                     // Normal damage behavior
                     // Priority: Shield powerup > Barrier shield > HP
