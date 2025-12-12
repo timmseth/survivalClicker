@@ -556,7 +556,7 @@ class SettingsView(context: Context) : View(context) {
                         invalidate()
                         return true
                     }
-                    showingDebugMenu && RectF(w * 0.25f, h * 0.7f, w * 0.75f, h * 0.8f).contains(x, y) -> {
+                    showingDebugMenu && RectF(width.toFloat() * 0.25f, height.toFloat() * 0.7f, width.toFloat() * 0.75f, height.toFloat() * 0.8f).contains(x, y) -> {
                         // Close debug menu
                         showingDebugMenu = false
                         invalidate()
