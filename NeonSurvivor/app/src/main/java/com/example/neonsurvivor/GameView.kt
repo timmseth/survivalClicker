@@ -448,6 +448,7 @@ class GameView(context: Context) : View(context) {
     private var barrierRecoveryTimer = 0f  // Timer for recovering barrier layers
     private val barrierRecoveryDelay = 10f  // 10 seconds without damage to recover 1 layer
     private var barrierWaveOffset = 0f  // Animation offset for wavy effect
+    private var barrierAoeDamageTimer = 0f  // Timer for AOE damage pulses (level 7+)
 
     // Waves + gacha
     private var wave = 1
@@ -895,8 +896,9 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
-            // Update barrier shield recovery
-            if (barrierShieldLayers < clickerBarrierLevel) {
+            // Update barrier shield recovery (max 7 layers, but AOE keeps scaling)
+            val maxLayers = min(clickerBarrierLevel, 7)
+            if (barrierShieldLayers < maxLayers) {
                 barrierRecoveryTimer += dt
                 if (barrierRecoveryTimer >= barrierRecoveryDelay) {
                     barrierShieldLayers++
@@ -906,6 +908,30 @@ class GameView(context: Context) : View(context) {
 
             // Update barrier wave animation
             barrierWaveOffset += dt * 2f
+
+            // Prismatic Barrier AOE damage (level 7+)
+            if (clickerBarrierLevel >= 7) {
+                barrierAoeDamageTimer += dt
+                val aoePulseInterval = 1.5f  // Damage pulse every 1.5 seconds
+                if (barrierAoeDamageTimer >= aoePulseInterval) {
+                    barrierAoeDamageTimer = 0f
+                    // AOE damage scales with levels past 7 (5 damage per level)
+                    val aoeDamage = (clickerBarrierLevel - 6) * 5f
+                    val aoeRadius = 150f  // Damage radius around player
+
+                    // Damage all enemies within radius
+                    for (e in enemies) {
+                        val dx = e.x - playerX
+                        val dy = e.y - playerY
+                        val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                        if (dist < aoeRadius) {
+                            e.hp -= aoeDamage
+                            // Small visual feedback - spawn blood particles
+                            spawnBlood(e.x, e.y)
+                        }
+                    }
+                }
+            }
         }
 
         updateBlood(dt)
@@ -1970,11 +1996,11 @@ class GameView(context: Context) : View(context) {
                         playerHp += (maxHp * 0.01f).toInt() // Also heal by the increase
                         return true
                     }
-                    barrierButtonRect.contains(x, y) && orbCurrency >= cost && clickerBarrierLevel < 6 -> {
+                    barrierButtonRect.contains(x, y) && orbCurrency >= cost -> {
                         orbCurrency -= cost
                         clickerBarrierLevel++
-                        // Add a new barrier layer immediately when purchased
-                        barrierShieldLayers = clickerBarrierLevel
+                        // Add a new barrier layer immediately when purchased (capped at 7)
+                        barrierShieldLayers = min(clickerBarrierLevel, 7)
                         return true
                     }
                 }
@@ -3046,18 +3072,19 @@ class GameView(context: Context) : View(context) {
                     drawButton(hpButtonRect, "HEALTH+", clickerHpLevel, 10)
                     buttonY -= buttonHeight + buttonGap
 
-                    // Button 4: Prismatic Barrier (with ROYGBV color progression)
+                    // Button 4: Prismatic Barrier (with ROYGBV color progression + AOE at 7+)
                     barrierButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     val barrierColor = getBarrierColor(clickerBarrierLevel)
-                    val barrierLabel = when (clickerBarrierLevel) {
-                        0 -> "P.BARRIER"
-                        1 -> "P.BARRIER (Red)"
-                        2 -> "P.BARRIER (Orange)"
-                        3 -> "P.BARRIER (Yellow)"
-                        4 -> "P.BARRIER (Green)"
-                        5 -> "P.BARRIER (Blue)"
-                        6 -> "P.BARRIER (Violet)"
-                        else -> "P.BARRIER (MAX)"
+                    val barrierLabel = when {
+                        clickerBarrierLevel == 0 -> "P.BARRIER"
+                        clickerBarrierLevel == 1 -> "P.BARRIER (Red)"
+                        clickerBarrierLevel == 2 -> "P.BARRIER (Orange)"
+                        clickerBarrierLevel == 3 -> "P.BARRIER (Yellow)"
+                        clickerBarrierLevel == 4 -> "P.BARRIER (Green)"
+                        clickerBarrierLevel == 5 -> "P.BARRIER (Blue)"
+                        clickerBarrierLevel == 6 -> "P.BARRIER (Violet)"
+                        clickerBarrierLevel == 7 -> "P.BARRIER (MAX)"
+                        else -> "P.BARRIER +${(clickerBarrierLevel - 7) * 5} AOE"
                     }
                     // Custom draw for barrier button with colored border
                     val shadowRect = RectF(barrierButtonRect.left + 4f, barrierButtonRect.top + 4f,
