@@ -145,11 +145,11 @@ class SplashScreenView(context: Context) : View(context) {
 
         private val arrowPaint = Paint().apply {
             color = Color.CYAN
-            textSize = 80f
+            textSize = 120f  // Increased from 80f for better visibility
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-            setShadowLayer(20f, 0f, 0f, Color.CYAN)
+            setShadowLayer(30f, 0f, 0f, Color.CYAN)  // Increased glow
         }
 
         private val characterNamePaint = Paint().apply {
@@ -261,7 +261,7 @@ class SplashScreenView(context: Context) : View(context) {
             )
 
             // Position arrow buttons
-            val arrowSize = 80f
+            val arrowSize = 120f  // Increased from 80f for easier tapping
             leftArrowRect = RectF(
                 characterSpotlightRect.left - arrowSize - 20f,
                 characterSpotlightRect.centerY() - arrowSize / 2f,
@@ -461,9 +461,9 @@ class SplashScreenView(context: Context) : View(context) {
                 characterNamePaint
             )
 
-            // Draw arrows
-            canvas.drawText("<", leftArrowRect.centerX(), leftArrowRect.centerY() + 25f, arrowPaint)
-            canvas.drawText(">", rightArrowRect.centerX(), rightArrowRect.centerY() + 25f, arrowPaint)
+            // Draw arrows (larger and more visible)
+            canvas.drawText("<", leftArrowRect.centerX(), leftArrowRect.centerY() + 35f, arrowPaint)
+            canvas.drawText(">", rightArrowRect.centerX(), rightArrowRect.centerY() + 35f, arrowPaint)
         }
 
         private fun drawButtons(canvas: Canvas) {
