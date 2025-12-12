@@ -1103,36 +1103,51 @@ class GameView(context: Context) : View(context) {
             }
 
             if (dist < e.radius + playerRadius && damageCooldown <= 0f) {
-                // Priority: Shield powerup > Barrier shield > HP
-                if (shieldCount > 0) {
-                    shieldCount--
-                    damageCooldown = 0.5f
-                } else if (barrierShieldLayers > 0) {
-                    // Barrier shield absorbs damage - drop one layer
-                    barrierShieldLayers--
-                    barrierRecoveryTimer = 0f  // Reset recovery timer
-                    triggerDamageFeedback()
-                    damageCooldown = 0.5f
-                } else if (!godMode) {
-                    // No shield - take HP damage (unless god mode)
-                    playerHp -= 25
-                    if (playerHp < 0) playerHp = 0
-                    CrashLogger.log("Player hit by enemy collision! HP: $playerHp, Enemy type: ${e.type}")
-                    tookDamage = true
-                    damageCooldown = 0.5f
-                    barrierRecoveryTimer = 0f  // Reset recovery timer when taking HP damage
+                if (godMode) {
+                    // God mode: deal massive damage to enemy instead
+                    e.hp -= 9999
+                    if (e.hp <= 0) {
+                        e.active = false
+                        killCount++
 
-                    // Bullet time activates when hit
-                    if (hasBulletTime) {
-                        bulletTimeActive = true
-                        bulletTimeTimer = 2f
+                        // Spawn XP orb
+                        if (xpOrbs.size < MAX_XP_ORBS) {
+                            xpOrbs.add(XpOrb(e.x, e.y, 5f))
+                        }
                     }
-                }
+                } else {
+                    // Normal damage behavior
+                    // Priority: Shield powerup > Barrier shield > HP
+                    if (shieldCount > 0) {
+                        shieldCount--
+                        damageCooldown = 0.5f
+                    } else if (barrierShieldLayers > 0) {
+                        // Barrier shield absorbs damage - drop one layer
+                        barrierShieldLayers--
+                        barrierRecoveryTimer = 0f  // Reset recovery timer
+                        triggerDamageFeedback()
+                        damageCooldown = 0.5f
+                    } else {
+                        // No shield - take HP damage
+                        playerHp -= 25
+                        if (playerHp < 0) playerHp = 0
+                        CrashLogger.log("Player hit by enemy collision! HP: $playerHp, Enemy type: ${e.type}")
+                        tookDamage = true
+                        damageCooldown = 0.5f
+                        barrierRecoveryTimer = 0f  // Reset recovery timer when taking HP damage
 
-                // Trigger hit animation
-                isPlayingHitAnimation = true
-                hitAnimationTime = 0f
-                currentFrame = 0
+                        // Bullet time activates when hit
+                        if (hasBulletTime) {
+                            bulletTimeActive = true
+                            bulletTimeTimer = 2f
+                        }
+                    }
+
+                    // Trigger hit animation
+                    isPlayingHitAnimation = true
+                    hitAnimationTime = 0f
+                    currentFrame = 0
+                }
             }
         }
 
@@ -1319,26 +1334,31 @@ class GameView(context: Context) : View(context) {
                 }
 
                 if (dist < playerRadius && damageCooldown <= 0f) {
-                    // Barrier shield absorbs bullet damage first
-                    if (barrierShieldLayers > 0) {
-                        barrierShieldLayers--
-                        barrierRecoveryTimer = 0f
-                        triggerDamageFeedback()
-                        damageCooldown = 0.3f
-                    } else if (!godMode) {
-                        playerHp -= 15
-                        if (playerHp < 0) playerHp = 0
-                        CrashLogger.log("Player hit by enemy bullet! HP: $playerHp")
-                        triggerDamageFeedback()
-                        damageCooldown = 0.3f
-                        barrierRecoveryTimer = 0f
-                    }
-                    bulletIt.remove()
+                    if (godMode) {
+                        // God mode: just remove bullet, no damage or animations
+                        bulletIt.remove()
+                    } else {
+                        // Barrier shield absorbs bullet damage first
+                        if (barrierShieldLayers > 0) {
+                            barrierShieldLayers--
+                            barrierRecoveryTimer = 0f
+                            triggerDamageFeedback()
+                            damageCooldown = 0.3f
+                        } else {
+                            playerHp -= 15
+                            if (playerHp < 0) playerHp = 0
+                            CrashLogger.log("Player hit by enemy bullet! HP: $playerHp")
+                            triggerDamageFeedback()
+                            damageCooldown = 0.3f
+                            barrierRecoveryTimer = 0f
+                        }
+                        bulletIt.remove()
 
-                    // Trigger hit animation
-                    isPlayingHitAnimation = true
-                    hitAnimationTime = 0f
-                    currentFrame = 0
+                        // Trigger hit animation
+                        isPlayingHitAnimation = true
+                        hitAnimationTime = 0f
+                        currentFrame = 0
+                    }
                 }
             }
         }
