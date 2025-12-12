@@ -825,7 +825,7 @@ class GameView(context: Context) : View(context) {
         healthCheckTimer += dt
         if (healthCheckTimer >= healthCheckInterval) {
             healthCheckTimer = 0f
-            CrashLogger.log("HEARTBEAT #$updateCallCount - Wave: $wave, HP: $playerHp/$maxPlayerHp, Kills: $killCount, Enemies: ${enemies.size}, Bullets: ${bullets.size}, PowerUps: ${powerUps.size}, inGacha: $inGacha")
+            CrashLogger.log("HEARTBEAT #$updateCallCount - Wave: $wave, HP: $playerHp/$maxHp, Kills: $killCount, Enemies: ${enemies.size}, Bullets: ${bullets.size}, PowerUps: ${powerUps.size}, inGacha: $inGacha")
         }
 
         // Handle menu slide animation
