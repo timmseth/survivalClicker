@@ -468,6 +468,40 @@ class SettingsView(context: Context) : View(context) {
                 draggingMusicSlider = false
                 draggingRainSlider = false
 
+                // Check debug menu buttons FIRST (if showing) so they take precedence
+                if (showingDebugMenu) {
+                    when {
+                        godModeToggleRect.contains(x, y) -> {
+                            godMode = !godMode
+                            debugPrefs.edit().putBoolean("god_mode", godMode).apply()
+                            invalidate()
+                            return true
+                        }
+                        gunCountMinusRect.contains(x, y) -> {
+                            gunCount = (gunCount - 1).coerceAtLeast(1)
+                            debugPrefs.edit().putInt("gun_count", gunCount).apply()
+                            invalidate()
+                            return true
+                        }
+                        gunCountPlusRect.contains(x, y) -> {
+                            gunCount = (gunCount + 1).coerceAtMost(10)
+                            debugPrefs.edit().putInt("gun_count", gunCount).apply()
+                            invalidate()
+                            return true
+                        }
+                        RectF(width.toFloat() * 0.25f, height.toFloat() * 0.7f, width.toFloat() * 0.75f, height.toFloat() * 0.8f).contains(x, y) -> {
+                            // Close debug menu
+                            showingDebugMenu = false
+                            invalidate()
+                            return true
+                        }
+                    }
+                    // If debug menu is showing and we didn't hit any debug buttons, consume the event anyway
+                    // to prevent clicking through to main menu
+                    return true
+                }
+
+                // Main menu buttons (only if debug menu not showing)
                 when {
                     musicToggleRect.contains(x, y) -> {
                         musicEnabled = !musicEnabled
@@ -516,56 +550,26 @@ class SettingsView(context: Context) : View(context) {
                         return true
                     }
                     viewLogButtonRect.contains(x, y) -> {
-                        if (!showingDebugMenu) {
-                            // Show crash log in a dialog
-                            val logContents = CrashLogger.getLogContents()
-                            val logPath = CrashLogger.getLogPath()
-                            android.app.AlertDialog.Builder(context)
-                                .setTitle("Crash Log")
-                                .setMessage("Log file: $logPath\n\n$logContents")
-                                .setPositiveButton("OK", null)
-                                .setNeutralButton("Clear Log") { _, _ ->
-                                    CrashLogger.clearLog()
-                                }
-                                .show()
-                        }
+                        // Show crash log in a dialog
+                        val logContents = CrashLogger.getLogContents()
+                        val logPath = CrashLogger.getLogPath()
+                        android.app.AlertDialog.Builder(context)
+                            .setTitle("Crash Log")
+                            .setMessage("Log file: $logPath\n\n$logContents")
+                            .setPositiveButton("OK", null)
+                            .setNeutralButton("Clear Log") { _, _ ->
+                                CrashLogger.clearLog()
+                            }
+                            .show()
                         return true
                     }
                     debugButtonRect.contains(x, y) -> {
-                        if (!showingDebugMenu) {
-                            showingDebugMenu = true
-                            invalidate()
-                        }
-                        return true
-                    }
-                    godModeToggleRect.contains(x, y) && showingDebugMenu -> {
-                        godMode = !godMode
-                        debugPrefs.edit().putBoolean("god_mode", godMode).apply()
-                        invalidate()
-                        return true
-                    }
-                    gunCountMinusRect.contains(x, y) && showingDebugMenu -> {
-                        gunCount = (gunCount - 1).coerceAtLeast(1)
-                        debugPrefs.edit().putInt("gun_count", gunCount).apply()
-                        invalidate()
-                        return true
-                    }
-                    gunCountPlusRect.contains(x, y) && showingDebugMenu -> {
-                        gunCount = (gunCount + 1).coerceAtMost(10)
-                        debugPrefs.edit().putInt("gun_count", gunCount).apply()
-                        invalidate()
-                        return true
-                    }
-                    showingDebugMenu && RectF(width.toFloat() * 0.25f, height.toFloat() * 0.7f, width.toFloat() * 0.75f, height.toFloat() * 0.8f).contains(x, y) -> {
-                        // Close debug menu
-                        showingDebugMenu = false
+                        showingDebugMenu = true
                         invalidate()
                         return true
                     }
                     backButtonRect.contains(x, y) -> {
-                        if (!showingDebugMenu) {
-                            (context as Activity).finish()
-                        }
+                        (context as Activity).finish()
                         return true
                     }
                 }
