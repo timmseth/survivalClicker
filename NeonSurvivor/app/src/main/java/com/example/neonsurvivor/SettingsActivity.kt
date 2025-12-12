@@ -88,13 +88,24 @@ class SettingsView(context: Context) : View(context) {
     private var saveButtonRect = RectF()
     private var loadButtonRect = RectF()
     private var viewLogButtonRect = RectF()
+    private var debugButtonRect = RectF()
     private var backButtonRect = RectF()
+
+    // Debug settings
+    private var godModeToggleRect = RectF()
+    private var gunCountMinusRect = RectF()
+    private var gunCountPlusRect = RectF()
+    private var showingDebugMenu = false
 
     private var draggingMusicSlider = false
     private var draggingRainSlider = false
 
     // Game stats prefs for save/load
     private val gamePrefs = context.getSharedPreferences("game_stats", Context.MODE_PRIVATE)
+    private val debugPrefs = context.getSharedPreferences("debug_settings", Context.MODE_PRIVATE)
+
+    private var godMode = debugPrefs.getBoolean("god_mode", false)
+    private var gunCount = debugPrefs.getInt("gun_count", 1)
 
     init {
         isFocusable = true
@@ -169,12 +180,38 @@ class SettingsView(context: Context) : View(context) {
             h * 0.73f + buttonHeight
         )
 
-        // View Log button (centered below save/load)
+        // View Log and Debug buttons (side by side below save/load)
+        val debugButtonWidth = w * 0.35f
         viewLogButtonRect = RectF(
-            w * 0.25f,
+            w * 0.1f,
             h * 0.85f,
-            w * 0.75f,
+            w * 0.1f + debugButtonWidth,
             h * 0.85f + 80f
+        )
+
+        debugButtonRect = RectF(
+            w * 0.55f,
+            h * 0.85f,
+            w * 0.55f + debugButtonWidth,
+            h * 0.85f + 80f
+        )
+
+        // Debug menu controls
+        val toggleWidth = 150f
+        val toggleHeight = 60f
+        godModeToggleRect = RectF(
+            w * 0.6f, h * 0.30f,
+            w * 0.6f + toggleWidth, h * 0.30f + toggleHeight
+        )
+
+        val buttonSize = 60f
+        gunCountMinusRect = RectF(
+            w * 0.4f, h * 0.42f,
+            w * 0.4f + buttonSize, h * 0.42f + buttonSize
+        )
+        gunCountPlusRect = RectF(
+            w * 0.7f, h * 0.42f,
+            w * 0.7f + buttonSize, h * 0.42f + buttonSize
         )
 
         // Back button
@@ -316,7 +353,81 @@ class SettingsView(context: Context) : View(context) {
         }
         canvas.drawRoundRect(viewLogButtonRect, 15f, 15f, buttonBgPaint)
         canvas.drawRoundRect(viewLogButtonRect, 15f, 15f, logBorderPaint)
-        canvas.drawText("VIEW CRASH LOG", viewLogButtonRect.centerX(), viewLogButtonRect.centerY() + 12f, logButtonPaint)
+        canvas.drawText("LOG", viewLogButtonRect.centerX(), viewLogButtonRect.centerY() + 12f, logButtonPaint)
+
+        // Debug button
+        val debugBorderPaint = Paint().apply {
+            color = Color.RED
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        val debugTextPaint = Paint().apply {
+            color = Color.RED
+            textSize = 35f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(debugButtonRect, 15f, 15f, buttonBgPaint)
+        canvas.drawRoundRect(debugButtonRect, 15f, 15f, debugBorderPaint)
+        canvas.drawText("DEBUG", debugButtonRect.centerX(), debugButtonRect.centerY() + 12f, debugTextPaint)
+
+        // Debug menu (if showing)
+        if (showingDebugMenu) {
+            // Semi-transparent overlay
+            val overlayPaint = Paint().apply {
+                color = Color.argb(220, 10, 10, 20)
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(0f, 0f, w, h, overlayPaint)
+
+            // Debug menu title
+            val debugTitlePaint = Paint().apply {
+                color = Color.RED
+                textSize = 60f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("DEBUG MENU", w / 2f, h * 0.2f, debugTitlePaint)
+
+            // God mode toggle
+            canvas.drawText("GOD MODE", w * 0.25f, godModeToggleRect.centerY() + 15f, labelPaint)
+            canvas.drawRoundRect(godModeToggleRect, 30f, 30f, if (godMode) toggleOnPaint else toggleOffPaint)
+            canvas.drawRoundRect(godModeToggleRect, 30f, 30f, buttonBorderPaint)
+            val toggleTextPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 30f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText(if (godMode) "ON" else "OFF",
+                godModeToggleRect.centerX(), godModeToggleRect.centerY() + 12f, toggleTextPaint)
+
+            // Gun count controls
+            canvas.drawText("GUN COUNT", w * 0.25f, gunCountMinusRect.centerY() + 15f, labelPaint)
+
+            // Minus button
+            canvas.drawRoundRect(gunCountMinusRect, 10f, 10f, buttonBgPaint)
+            canvas.drawRoundRect(gunCountMinusRect, 10f, 10f, buttonBorderPaint)
+            canvas.drawText("-", gunCountMinusRect.centerX(), gunCountMinusRect.centerY() + 18f, debugTitlePaint)
+
+            // Gun count display
+            canvas.drawText("$gunCount", w * 0.55f, gunCountMinusRect.centerY() + 15f, labelPaint)
+
+            // Plus button
+            canvas.drawRoundRect(gunCountPlusRect, 10f, 10f, buttonBgPaint)
+            canvas.drawRoundRect(gunCountPlusRect, 10f, 10f, buttonBorderPaint)
+            canvas.drawText("+", gunCountPlusRect.centerX(), gunCountPlusRect.centerY() + 18f, debugTitlePaint)
+
+            // Close button
+            val closeButtonRect = RectF(w * 0.25f, h * 0.7f, w * 0.75f, h * 0.8f)
+            canvas.drawRoundRect(closeButtonRect, 20f, 20f, buttonBgPaint)
+            canvas.drawRoundRect(closeButtonRect, 20f, 20f, buttonBorderPaint)
+            canvas.drawText("CLOSE", closeButtonRect.centerX(), closeButtonRect.centerY() + 20f, debugTitlePaint)
+        }
 
         // Back button
         canvas.drawRoundRect(backButtonRect, 20f, 20f, buttonBgPaint)
@@ -405,21 +516,56 @@ class SettingsView(context: Context) : View(context) {
                         return true
                     }
                     viewLogButtonRect.contains(x, y) -> {
-                        // Show crash log in a dialog
-                        val logContents = CrashLogger.getLogContents()
-                        val logPath = CrashLogger.getLogPath()
-                        android.app.AlertDialog.Builder(context)
-                            .setTitle("Crash Log")
-                            .setMessage("Log file: $logPath\n\n$logContents")
-                            .setPositiveButton("OK", null)
-                            .setNeutralButton("Clear Log") { _, _ ->
-                                CrashLogger.clearLog()
-                            }
-                            .show()
+                        if (!showingDebugMenu) {
+                            // Show crash log in a dialog
+                            val logContents = CrashLogger.getLogContents()
+                            val logPath = CrashLogger.getLogPath()
+                            android.app.AlertDialog.Builder(context)
+                                .setTitle("Crash Log")
+                                .setMessage("Log file: $logPath\n\n$logContents")
+                                .setPositiveButton("OK", null)
+                                .setNeutralButton("Clear Log") { _, _ ->
+                                    CrashLogger.clearLog()
+                                }
+                                .show()
+                        }
+                        return true
+                    }
+                    debugButtonRect.contains(x, y) -> {
+                        if (!showingDebugMenu) {
+                            showingDebugMenu = true
+                            invalidate()
+                        }
+                        return true
+                    }
+                    godModeToggleRect.contains(x, y) && showingDebugMenu -> {
+                        godMode = !godMode
+                        debugPrefs.edit().putBoolean("god_mode", godMode).apply()
+                        invalidate()
+                        return true
+                    }
+                    gunCountMinusRect.contains(x, y) && showingDebugMenu -> {
+                        gunCount = (gunCount - 1).coerceAtLeast(1)
+                        debugPrefs.edit().putInt("gun_count", gunCount).apply()
+                        invalidate()
+                        return true
+                    }
+                    gunCountPlusRect.contains(x, y) && showingDebugMenu -> {
+                        gunCount = (gunCount + 1).coerceAtMost(10)
+                        debugPrefs.edit().putInt("gun_count", gunCount).apply()
+                        invalidate()
+                        return true
+                    }
+                    showingDebugMenu && RectF(w * 0.25f, h * 0.7f, w * 0.75f, h * 0.8f).contains(x, y) -> {
+                        // Close debug menu
+                        showingDebugMenu = false
+                        invalidate()
                         return true
                     }
                     backButtonRect.contains(x, y) -> {
-                        (context as Activity).finish()
+                        if (!showingDebugMenu) {
+                            (context as Activity).finish()
+                        }
                         return true
                     }
                 }

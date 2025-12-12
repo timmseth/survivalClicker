@@ -328,10 +328,17 @@ class GameView(context: Context) : View(context) {
     private var multishotStacks = 0
     private var hasShockwave = false
 
+    // Multi-gun system
+    private var gunCount = 1  // Number of parallel gun streams
+
+    // Debug settings
+    private var godMode = false
+
     // Kill tracking
     private var killCount = 0
     private val prefs = context.getSharedPreferences("game_stats", Context.MODE_PRIVATE)
     private val settingsPrefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val debugPrefs = context.getSharedPreferences("debug_settings", Context.MODE_PRIVATE)
 
     // Joystick
     private var joyBaseX = 0f
@@ -483,6 +490,7 @@ class GameView(context: Context) : View(context) {
         // Special upgrades (wave-end rewards)
         STASIS_CORE, OVERCLOCKER, QUANTUM_MIRROR, FRAGMENT_DRIVE,
         CONVERT_TO_ORBS, CONVERT_TO_BULLETS, CONVERT_TO_HOMING,
+        MULTI_GUN,  // Adds an additional gun
         // Basic stat upgrades removed from wave-end (moved to orb shop only)
     }
 
@@ -589,7 +597,11 @@ class GameView(context: Context) : View(context) {
                 h / 2f + tabSize + tabGap / 2f
             )
 
-            CrashLogger.log("GameView initialized. Starting wave 1")
+            // Load debug settings
+            godMode = debugPrefs.getBoolean("god_mode", false)
+            gunCount = debugPrefs.getInt("gun_count", 1).coerceIn(1, 10)
+
+            CrashLogger.log("GameView initialized. Starting wave 1. God mode: $godMode, Guns: $gunCount")
             spawnWave()
 
             // Start audio
@@ -1097,8 +1109,8 @@ class GameView(context: Context) : View(context) {
                     barrierRecoveryTimer = 0f  // Reset recovery timer
                     triggerDamageFeedback()
                     damageCooldown = 0.5f
-                } else {
-                    // No shield - take HP damage
+                } else if (!godMode) {
+                    // No shield - take HP damage (unless god mode)
                     playerHp -= 25
                     if (playerHp < 0) playerHp = 0
                     CrashLogger.log("Player hit by enemy collision! HP: $playerHp, Enemy type: ${e.type}")
@@ -1189,15 +1201,25 @@ class GameView(context: Context) : View(context) {
                 // Stasis Core - player bullets slow enemy bullets in radius
                 if (hasStasisCore) {
                     val slowRadius = 100f
-                    val slowFactor = 0.5f  // Slow to 50% speed
+                    val slowFactor = 0.7f  // Slow to 70% speed (less aggressive)
+                    val minSpeed = 80f  // Minimum bullet speed to prevent complete stalls
                     for (eb in bullets) {
                         if (!eb.isPlayerBullet) {
                             val dx = eb.x - b.x
                             val dy = eb.y - b.y
                             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
                             if (dist < slowRadius) {
+                                // Apply slow factor
                                 eb.vx *= slowFactor
                                 eb.vy *= slowFactor
+
+                                // Enforce minimum speed
+                                val currentSpeed = hypot(eb.vx.toDouble(), eb.vy.toDouble()).toFloat()
+                                if (currentSpeed < minSpeed && currentSpeed > 0f) {
+                                    val scale = minSpeed / currentSpeed
+                                    eb.vx *= scale
+                                    eb.vy *= scale
+                                }
                             }
                         }
                     }
@@ -1299,7 +1321,7 @@ class GameView(context: Context) : View(context) {
                         barrierRecoveryTimer = 0f
                         triggerDamageFeedback()
                         damageCooldown = 0.3f
-                    } else {
+                    } else if (!godMode) {
                         playerHp -= 15
                         if (playerHp < 0) playerHp = 0
                         CrashLogger.log("Player hit by enemy bullet! HP: $playerHp")
@@ -1353,29 +1375,49 @@ class GameView(context: Context) : View(context) {
                 // Calculate number of shots (base + multishot stacks)
                 val totalShots = 1 + multishotStacks
 
-                // Apply power-ups
-                if (hasSpreadShot) {
-                    // Fire 3 bullets in a spread per shot
-                    val spreadAngle = 0.3f
-                    for (shot in 0 until totalShots) {
-                        val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.2f else 0f
-                        for (i in -1..1) {
+                // Calculate gun positions (perpendicular to firing direction)
+                val gunOffsets = mutableListOf<Pair<Float, Float>>()
+                if (gunCount == 1) {
+                    gunOffsets.add(Pair(0f, 0f))  // Single gun at center
+                } else {
+                    val gunSpacing = 25f  // Spacing between guns
+                    val perpX = -ny  // Perpendicular to direction
+                    val perpY = nx
+                    for (i in 0 until gunCount) {
+                        val offset = (i - (gunCount - 1) / 2f) * gunSpacing
+                        gunOffsets.add(Pair(perpX * offset, perpY * offset))
+                    }
+                }
+
+                // Fire from each gun position
+                for ((offsetX, offsetY) in gunOffsets) {
+                    val gunX = playerX + offsetX
+                    val gunY = playerY + offsetY
+
+                    // Apply power-ups
+                    if (hasSpreadShot) {
+                        // Fire 3 bullets in a spread per shot
+                        val spreadAngle = 0.3f
+                        for (shot in 0 until totalShots) {
+                            val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.2f else 0f
+                            for (i in -1..1) {
+                                if (bullets.size >= MAX_BULLETS) break
+                                val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle + angleOffset
+                                val vx = cos(angle) * bulletSpeed
+                                val vy = sin(angle) * bulletSpeed
+                                bullets.add(Bullet(gunX, gunY, vx, vy, true))
+                            }
+                        }
+                    } else {
+                        // Fire multiple shots in a tight spread
+                        for (shot in 0 until totalShots) {
                             if (bullets.size >= MAX_BULLETS) break
-                            val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle + angleOffset
+                            val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.15f else 0f
+                            val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + angleOffset
                             val vx = cos(angle) * bulletSpeed
                             val vy = sin(angle) * bulletSpeed
-                            bullets.add(Bullet(playerX, playerY, vx, vy, true))
+                            bullets.add(Bullet(gunX, gunY, vx, vy, true))
                         }
-                    }
-                } else {
-                    // Fire multiple shots in a tight spread
-                    for (shot in 0 until totalShots) {
-                        if (bullets.size >= MAX_BULLETS) break
-                        val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.15f else 0f
-                        val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + angleOffset
-                        val vx = cos(angle) * bulletSpeed
-                        val vy = sin(angle) * bulletSpeed
-                        bullets.add(Bullet(playerX, playerY, vx, vy, true))
                     }
                 }
 
@@ -1680,6 +1722,7 @@ class GameView(context: Context) : View(context) {
             UpgradeOption(UpgradeType.OVERCLOCKER, "Overclocker", "2x fire rate for 5 seconds", weight = 120),
             UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Quantum Mirror", "Reflects bullets that graze you", weight = 80),
             UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", "Kills spawn 4 micro-projectiles", weight = 100),
+            UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Adds an additional parallel gun", weight = 40),  // Rare
             UpgradeOption(UpgradeType.CONVERT_TO_ORBS, "Orb Converter", "Convert all bullets to orbs", weight = 90),
             UpgradeOption(UpgradeType.CONVERT_TO_BULLETS, "Bullet Converter", "Convert all bullets to player bullets", weight = 110),
             UpgradeOption(UpgradeType.CONVERT_TO_HOMING, "Homing Converter", "Convert all bullets to homing shards", weight = 85)
@@ -1722,6 +1765,10 @@ class GameView(context: Context) : View(context) {
             UpgradeType.FRAGMENT_DRIVE -> {
                 hasFragmentDrive = true
                 CrashLogger.log("Fragment Drive activated")
+            }
+            UpgradeType.MULTI_GUN -> {
+                gunCount++
+                CrashLogger.log("Multi-Gun activated! Gun count: $gunCount")
             }
             UpgradeType.CONVERT_TO_ORBS -> {
                 CrashLogger.log("Converting bullets to orbs. Bullet count: ${bullets.size}")
