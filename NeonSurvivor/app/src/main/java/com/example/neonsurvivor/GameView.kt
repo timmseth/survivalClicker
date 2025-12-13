@@ -695,60 +695,90 @@ class GameView(context: Context) : View(context) {
             CrashLogger.log("Boss wave detected for wave $wave")
         }
 
-        // Logarithmic scaling with soft cap at MAX_ENEMIES
-        val baseCount = 8 + (wave * 3f) / (1f + wave * 0.05f)
-        val count = if (isBreatherWave) {
-            // Breather wave: 60% normal count but guaranteed loot
-            (baseCount * 0.6f).toInt()
-        } else {
-            kotlin.math.min(baseCount.toInt(), MAX_ENEMIES)
-        }
+        // TEST MODE: Wave 1 spawns 3 of each enemy type for testing
+        if (wave == 1) {
+            CrashLogger.log("TEST WAVE 1: Spawning 3 of each enemy type")
+            val testTypes = listOf(EnemyType.ZOMBIE, EnemyType.ARCHER, EnemyType.SHOTGUNNER)
 
-        for (i in 0 until count) {
-            val edge = rnd.nextInt(4)
-            val ex: Float
-            val ey: Float
-            // Spawn in world coordinates relative to player position
-            when (edge) {
-                0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
-                1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
-                2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
-                else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
-            }
+            for (type in testTypes) {
+                for (j in 0 until 3) {
+                    val edge = rnd.nextInt(4)
+                    val ex: Float
+                    val ey: Float
+                    when (edge) {
+                        0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
+                        1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
+                        2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                        else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                    }
 
-            // Logarithmic HP scaling (gentler early game)
-            val hp = 20f + sqrt(wave.toFloat()) * 15f  // Reduced from 30 + 20
+                    val hp = 20f
+                    val baseSpeed = 80f
+                    val isZombie = type == EnemyType.ZOMBIE
+                    val zombieScaleFactor = if (isZombie) 1.25f else 1f
+                    val zombieRadius = 24f * zombieScaleFactor
 
-            // Speed caps at 350f, starts slower
-            val baseSpeed = kotlin.math.min(80f + wave * 8f, 350f)  // Starts at 80 instead of 100
-
-            // Elite enemies after wave 10: 20% chance for 2x HP, guaranteed drop
-            val isElite = wave >= 10 && rnd.nextFloat() < 0.2f
-            val finalHp = if (isElite) hp * 2f else hp
-
-            // Progressive enemy type introduction based on wave
-            val enemyType = when {
-                wave <= 3 -> EnemyType.ZOMBIE  // Waves 1-3: Only zombies
-                wave <= 6 -> if (rnd.nextFloat() < 0.7f) EnemyType.ZOMBIE else EnemyType.ARCHER  // Waves 4-6: Introduce archers
-                else -> when (rnd.nextInt(10)) {
-                    0, 1, 2, 3, 4 -> EnemyType.ZOMBIE      // Wave 7+: 50% zombies
-                    5, 6, 7 -> EnemyType.ARCHER            // 30% archers
-                    else -> EnemyType.SHOTGUNNER           // 20% shotgunners
+                    val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, hp, hp, type, isZombie = isZombie)
+                    enemies.add(enemy)
+                    CrashLogger.log("Spawned test enemy: $type at ($ex, $ey)")
                 }
             }
-
-            val isZombie = enemyType == EnemyType.ZOMBIE
-            val zombieScaleFactor = if (isZombie) 1.25f else 1f  // 25% larger
-            val zombieRadius = 24f * zombieScaleFactor
-
-            val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, finalHp, finalHp, enemyType, isZombie = isZombie)
-
-            // Tag elite enemies for guaranteed drops (store in a set)
-            if (isElite || isBreatherWave) {
-                guaranteedDropEnemies.add(enemy)
+        } else {
+            // NORMAL MODE: Regular wave spawning for wave 2+
+            val baseCount = 8 + (wave * 3f) / (1f + wave * 0.05f)
+            val count = if (isBreatherWave) {
+                // Breather wave: 60% normal count but guaranteed loot
+                (baseCount * 0.6f).toInt()
+            } else {
+                kotlin.math.min(baseCount.toInt(), MAX_ENEMIES)
             }
 
-            enemies.add(enemy)
+            for (i in 0 until count) {
+                val edge = rnd.nextInt(4)
+                val ex: Float
+                val ey: Float
+                // Spawn in world coordinates relative to player position
+                when (edge) {
+                    0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
+                    1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
+                    2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                    else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                }
+
+                // Logarithmic HP scaling (gentler early game)
+                val hp = 20f + sqrt(wave.toFloat()) * 15f  // Reduced from 30 + 20
+
+                // Speed caps at 350f, starts slower
+                val baseSpeed = kotlin.math.min(80f + wave * 8f, 350f)  // Starts at 80 instead of 100
+
+                // Elite enemies after wave 10: 20% chance for 2x HP, guaranteed drop
+                val isElite = wave >= 10 && rnd.nextFloat() < 0.2f
+                val finalHp = if (isElite) hp * 2f else hp
+
+                // Progressive enemy type introduction based on wave
+                val enemyType = when {
+                    wave <= 3 -> EnemyType.ZOMBIE  // Waves 1-3: Only zombies
+                    wave <= 6 -> if (rnd.nextFloat() < 0.7f) EnemyType.ZOMBIE else EnemyType.ARCHER  // Waves 4-6: Introduce archers
+                    else -> when (rnd.nextInt(10)) {
+                        0, 1, 2, 3, 4 -> EnemyType.ZOMBIE      // Wave 7+: 50% zombies
+                        5, 6, 7 -> EnemyType.ARCHER            // 30% archers
+                        else -> EnemyType.SHOTGUNNER           // 20% shotgunners
+                    }
+                }
+
+                val isZombie = enemyType == EnemyType.ZOMBIE
+                val zombieScaleFactor = if (isZombie) 1.25f else 1f  // 25% larger
+                val zombieRadius = 24f * zombieScaleFactor
+
+                val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, finalHp, finalHp, enemyType, isZombie = isZombie)
+
+                // Tag elite enemies for guaranteed drops (store in a set)
+                if (isElite || isBreatherWave) {
+                    guaranteedDropEnemies.add(enemy)
+                }
+
+                enemies.add(enemy)
+            }
         }
 
         // Spawn boss every 5 waves
