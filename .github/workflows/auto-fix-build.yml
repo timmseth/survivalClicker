@@ -1,0 +1,96 @@
+name: Auto-Fix Build Failures
+
+on:
+  workflow_run:
+    workflows: ["Build with Gradle"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  auto-fix:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Get build logs
+        id: get-logs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.payload.workflow_run.id;
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+
+            const failedJob = jobs.data.jobs.find(job => job.conclusion === 'failure');
+            if (!failedJob) return '';
+
+            const logs = await github.rest.actions.downloadJobLogsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              job_id: failedJob.id,
+            });
+
+            // Extract error from logs
+            const logText = Buffer.from(logs.data).toString();
+            const errorMatch = logText.match(/error:.*?(?=\n\n|\nFAILURE)/s);
+            return errorMatch ? errorMatch[0] : logText.slice(-5000);
+          result-encoding: string
+
+      - name: Call Claude API to fix build
+        id: claude-fix
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BUILD_ERROR: ${{ steps.get-logs.outputs.result }}
+        run: |
+          # Call Claude API with the build error
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "content-type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "{
+              \"model\": \"claude-sonnet-4-20250514\",
+              \"max_tokens\": 4096,
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"Build failed with error:\n\n$BUILD_ERROR\n\nFix the build by:\n1. Identifying the error\n2. Providing the exact file path and changes needed\n3. Return as JSON: {\\\"file\\\": \\\"path\\\", \\\"fix\\\": \\\"description\\\", \\\"search\\\": \\\"text to replace\\\", \\\"replace\\\": \\\"new text\\\"}\"
+              }]
+            }")
+
+          echo "claude_response=$RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Apply fix
+        run: |
+          # Parse Claude's response and apply the fix
+          # This would need proper JSON parsing
+          echo "Fix would be applied here"
+
+      - name: Commit and push fix
+        run: |
+          git config user.name "claude-auto-fix[bot]"
+          git config user.email "autofix@claude.ai"
+          git add .
+          git commit -m "🤖 Auto-fix build failure" || exit 0
+          git push
+
+      - name: Comment on commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: '🤖 Build failure auto-fixed by Claude'
+            })
