@@ -943,9 +943,9 @@ class GameView(context: Context) : View(context) {
                     quantumMirrorRegenTimer = 0f
                     // Fire bullets from each drone toward nearest enemy
                     for (i in 0 until quantumMirrorMaxPaddles) {
-                        val angleStep = (2f * Math.PI.toFloat()) / quantumMirrorMaxPaddles
-                        val angle = angleStep * i + paddleAngleOffset
-                        val droneOrbitRadius = actualSpriteHeight / 2f + 35f
+                        val angleStep = (2f * Math.PI.toFloat()) / quantumMirrorMaxPaddles.toFloat()
+                        val angle = angleStep * i.toFloat() + paddleAngleOffset
+                        val droneOrbitRadius = playerRadius + 35f
                         val droneX = playerX + cos(angle.toDouble()).toFloat() * droneOrbitRadius
                         val droneY = playerY + sin(angle.toDouble()).toFloat() * droneOrbitRadius
 
@@ -953,7 +953,7 @@ class GameView(context: Context) : View(context) {
                         var nearestEnemy: Enemy? = null
                         var nearestDist = Float.MAX_VALUE
                         for (e in enemies) {
-                            val dist = hypot((e.x - droneX).toDouble(), (e.y - droneY).toDouble()).toFloat()
+                            val dist = hypot((e.x.toDouble() - droneX.toDouble()), (e.y.toDouble() - droneY.toDouble())).toFloat()
                             if (dist < nearestDist) {
                                 nearestDist = dist
                                 nearestEnemy = e
