@@ -2751,12 +2751,16 @@ class GameView(context: Context) : View(context) {
                 else -> null
             }
             if (spriteBitmap != null) {
-                // Draw sprite - different sizes per enemy type
-                val enemySize = when (e.type) {
-                    EnemyType.ARCHER, EnemyType.SHOTGUNNER -> 240f  // 4x size for ranged enemies
+                // Draw sprite - different sizes per enemy type (target height)
+                val targetHeight = when (e.type) {
+                    EnemyType.ARCHER, EnemyType.SHOTGUNNER -> 120f  // Adjusted size for ranged enemies
                     EnemyType.ZOMBIE -> 75f  // 25% larger than base
                     else -> 60f  // Base size
                 }
+
+                // Calculate width based on sprite aspect ratio to avoid squashing
+                val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
+                val targetWidth = targetHeight * aspectRatio
 
                 // Draw glow BEHIND sprite (green for zombies)
                 val glowRadius = e.getGlowRadius()
@@ -2768,9 +2772,9 @@ class GameView(context: Context) : View(context) {
                         maskFilter = android.graphics.BlurMaskFilter(15f, android.graphics.BlurMaskFilter.Blur.NORMAL)
                         alpha = 180
                     }
-                    canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, zombieGlowPaint)
+                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, zombieGlowPaint)
                 } else {
-                    canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, enemyGlowPaint)
+                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, enemyGlowPaint)
                 }
 
                 // Flip horizontally if moving right
@@ -2779,11 +2783,12 @@ class GameView(context: Context) : View(context) {
                     canvas.scale(-1f, 1f, e.x, e.y)
                 }
 
+                // Anchor at bottom-center for proper grounding (pivot point)
                 val dstRect = RectF(
-                    e.x - enemySize / 2f,
-                    e.y - enemySize / 2f,
-                    e.x + enemySize / 2f,
-                    e.y + enemySize / 2f
+                    e.x - targetWidth / 2f,
+                    e.y - targetHeight,  // Bottom-center anchor
+                    e.x + targetWidth / 2f,
+                    e.y
                 )
 
                 // Draw sprite with green tint for zombies
