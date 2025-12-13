@@ -505,7 +505,12 @@ class GameView(context: Context) : View(context) {
 
     // Active special upgrade effects
     private var hasStasisCore = false
-    private var hasQuantumMirror = false
+    // Quantum Mirror - Paddle deflection system
+    private var quantumMirrorMaxPaddles = 0  // Total paddle capacity
+    private var quantumMirrorActivePaddles = 0  // Currently available paddles
+    private var quantumMirrorCooldown = 10f  // Seconds to regenerate one paddle
+    private var quantumMirrorRegenTimer = 0f  // Current regen timer
+    private var paddleAngleOffset = 0f  // Animation rotation for paddles
     private var hasFragmentDrive = false
     private var overclockTimer = 0f
     private var overclockActive = false
@@ -908,6 +913,17 @@ class GameView(context: Context) : View(context) {
 
             // Update barrier wave animation
             barrierWaveOffset += dt * 2f
+
+            // Quantum Mirror paddle regeneration
+            if (quantumMirrorMaxPaddles > 0 && quantumMirrorActivePaddles < quantumMirrorMaxPaddles) {
+                quantumMirrorRegenTimer += dt
+                if (quantumMirrorRegenTimer >= quantumMirrorCooldown) {
+                    quantumMirrorRegenTimer = 0f
+                    quantumMirrorActivePaddles++
+                }
+            }
+            // Paddle rotation animation
+            paddleAngleOffset += dt * 1.5f
 
             // Prismatic Barrier AOE damage (level 7+)
             if (clickerBarrierLevel >= 7) {
@@ -1349,14 +1365,16 @@ class GameView(context: Context) : View(context) {
                 val dy = b.y - playerY
                 val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
-                // Quantum Mirror - reflect bullets that graze player (within 1.5x radius but not hitting)
-                if (hasQuantumMirror && dist < playerRadius * 1.5f && dist >= playerRadius) {
-                    // Reflect bullet away from player
-                    val nx = dx / dist
-                    val ny = dy / dist
-                    val speed = hypot(b.vx.toDouble(), b.vy.toDouble()).toFloat()
-                    b.vx = nx * speed
-                    b.vy = ny * speed
+                // Quantum Mirror - paddle deflection (consume paddle to block bullet)
+                val paddleRadius = playerRadius * 2f  // Interception radius
+                if (quantumMirrorActivePaddles > 0 && dist < paddleRadius && dist >= playerRadius * 0.8f) {
+                    // Close enough for paddle to intercept - consume a paddle and destroy bullet
+                    quantumMirrorActivePaddles--
+                    quantumMirrorRegenTimer = 0f  // Reset regen timer
+                    bulletIt.remove()
+                    // Visual feedback - spawn some particles
+                    spawnBlood(b.x, b.y)
+                    continue
                 }
 
                 if (dist < playerRadius && damageCooldown <= 0f) {
@@ -1776,7 +1794,7 @@ class GameView(context: Context) : View(context) {
         val dropTable = listOf(
             UpgradeOption(UpgradeType.STASIS_CORE, "Stasis Core", "Player bullets slow enemy bullets", weight = 100),
             UpgradeOption(UpgradeType.OVERCLOCKER, "Overclocker", "2x fire rate for 5 seconds", weight = 120),
-            UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Quantum Mirror", "Reflects bullets that graze you", weight = 80),
+            UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Quantum Mirror", "Adds deflection paddle (10s cooldown)", weight = 80),
             UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", "Kills spawn 4 micro-projectiles", weight = 100),
             UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Adds an additional parallel gun", weight = 40),  // Rare
             UpgradeOption(UpgradeType.CONVERT_TO_ORBS, "Orb Converter", "Convert all bullets to orbs", weight = 90),
@@ -1815,8 +1833,21 @@ class GameView(context: Context) : View(context) {
                 CrashLogger.log("Overclocker activated")
             }
             UpgradeType.QUANTUM_MIRROR -> {
-                hasQuantumMirror = true
-                CrashLogger.log("Quantum Mirror activated")
+                if (quantumMirrorMaxPaddles == 0) {
+                    // First upgrade: add first paddle
+                    quantumMirrorMaxPaddles = 1
+                    quantumMirrorActivePaddles = 1
+                    CrashLogger.log("Quantum Mirror: First paddle added")
+                } else if (quantumMirrorCooldown > 3f) {
+                    // Reduce cooldown (10s -> 7s -> 5s -> 3s)
+                    quantumMirrorCooldown -= 2f
+                    CrashLogger.log("Quantum Mirror: Cooldown reduced to ${quantumMirrorCooldown}s")
+                } else {
+                    // Add another paddle
+                    quantumMirrorMaxPaddles++
+                    quantumMirrorActivePaddles++
+                    CrashLogger.log("Quantum Mirror: Paddle added. Total: $quantumMirrorMaxPaddles")
+                }
             }
             UpgradeType.FRAGMENT_DRIVE -> {
                 hasFragmentDrive = true
@@ -2548,6 +2579,54 @@ class GameView(context: Context) : View(context) {
             }
         }
 
+        // Draw Quantum Mirror paddles (orbit player closely)
+        if (quantumMirrorMaxPaddles > 0) {
+            val paddleOrbitRadius = actualSpriteHeight / 2f + 35f  // Close orbit
+            val paddlePaint = Paint().apply {
+                color = Color.CYAN
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            val paddleBorderPaint = Paint().apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+                isAntiAlias = true
+            }
+
+            // Draw paddles evenly distributed around player
+            for (i in 0 until quantumMirrorMaxPaddles) {
+                val angleStep = (2f * Math.PI.toFloat()) / quantumMirrorMaxPaddles
+                val angle = angleStep * i + paddleAngleOffset
+                val paddleX = playerX + cos(angle.toDouble()).toFloat() * paddleOrbitRadius
+                val paddleY = playerY + sin(angle.toDouble()).toFloat() * paddleOrbitRadius
+
+                // Draw paddle as small rectangle (like pong paddle)
+                val paddleWidth = 20f
+                val paddleHeight = 6f
+
+                // Dim the paddle if it's depleted (only show active ones brightly)
+                if (i < quantumMirrorActivePaddles) {
+                    // Active paddle - bright cyan
+                    paddlePaint.alpha = 255
+                    paddleBorderPaint.alpha = 255
+                } else {
+                    // Depleted paddle - very dim to show it's recharging
+                    paddlePaint.alpha = 50
+                    paddleBorderPaint.alpha = 50
+                }
+
+                val paddleRect = RectF(
+                    paddleX - paddleWidth / 2f,
+                    paddleY - paddleHeight / 2f,
+                    paddleX + paddleWidth / 2f,
+                    paddleY + paddleHeight / 2f
+                )
+                canvas.drawRoundRect(paddleRect, 3f, 3f, paddlePaint)
+                canvas.drawRoundRect(paddleRect, 3f, 3f, paddleBorderPaint)
+            }
+        }
+
         // Draw neon glow behind sprite (smaller radius)
         canvas.drawCircle(playerX, playerY, actualSpriteHeight / 2.5f, spriteGlowPaint)
 
@@ -2701,7 +2780,12 @@ class GameView(context: Context) : View(context) {
                     if (hasStasisCore) activeUpgrades.add("Stasis Core - Bullets slow enemies")
                     if (overclockActive) activeUpgrades.add("Overclocker - 2x fire rate (${overclockTimer.toInt()}s)")
                     else if (overclockTimer > 0f && !overclockActive) activeUpgrades.add("Overclocker (ready)")
-                    if (hasQuantumMirror) activeUpgrades.add("Quantum Mirror - Graze reflect")
+                    if (quantumMirrorMaxPaddles > 0) {
+                        val regenTime = if (quantumMirrorActivePaddles < quantumMirrorMaxPaddles) {
+                            " (${(quantumMirrorCooldown - quantumMirrorRegenTimer).toInt()}s)"
+                        } else ""
+                        activeUpgrades.add("Quantum Mirror - ${quantumMirrorActivePaddles}/${quantumMirrorMaxPaddles} paddles$regenTime")
+                    }
                     if (hasFragmentDrive) activeUpgrades.add("Fragment Drive - Kill fragments")
 
                     if (activeUpgrades.isNotEmpty()) {
