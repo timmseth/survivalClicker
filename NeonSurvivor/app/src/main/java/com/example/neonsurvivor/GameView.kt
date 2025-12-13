@@ -285,6 +285,15 @@ class GameView(context: Context) : View(context) {
     // Enemy sprites - 27 individual sprites loaded from split folder
     private val enemySprites = mutableMapOf<Int, Bitmap>()
     private val bossSprites = mutableMapOf<EnemyType, Bitmap>()
+
+    // Archer sprite animation frames (vertical strips: idle=6 frames, run=8 frames)
+    private val archerIdleFrames = mutableListOf<Bitmap>()
+    private val archerRunFrames = mutableListOf<Bitmap>()
+
+    // Shotgunner sprite animation frames (vertical strips: idle=6 frames, run=8 frames)
+    private val shotgunnerIdleFrames = mutableListOf<Bitmap>()
+    private val shotgunnerRunFrames = mutableListOf<Bitmap>()
+
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
@@ -383,7 +392,10 @@ class GameView(context: Context) : View(context) {
         var animFrame: Int = 0,
         var animTime: Float = 0f,
         val isBoss: Boolean = false,
-        val isZombie: Boolean = false  // Melee-only enemy, no shooting, 2x contact damage
+        val isZombie: Boolean = false,  // Melee-only enemy, no shooting, 2x contact damage
+        var lastX: Float = x,  // Track previous position to determine movement state
+        var lastY: Float = y,
+        var isRunning: Boolean = false  // Animation state: true = run, false = idle
     ) {
         fun getCornerCount(): Int = when(type) {
             EnemyType.ZOMBIE -> 0  // Melee only, no shooting
@@ -573,20 +585,63 @@ class GameView(context: Context) : View(context) {
             CrashLogger.log("ERROR: Failed to load BOSS_BALLCHAIN sprite: ${e.message}")
         }
 
+        // Load archer sprite sheets from assets and split into frames
         try {
-            bossSprites[EnemyType.ARCHER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_archer)
-            CrashLogger.log("Loaded ARCHER sprite successfully")
+            // Idle: 6 frames @ 7 FPS
+            val archerIdleSheet = context.assets.open("enemies/archer/idle.png").use {
+                BitmapFactory.decodeStream(it)
+            }
+            splitVerticalSpriteSheet(archerIdleSheet, 6, archerIdleFrames)
+            CrashLogger.log("Loaded ARCHER idle frames: ${archerIdleFrames.size}")
+
+            // Run: 8 frames @ 11 FPS
+            val archerRunSheet = context.assets.open("enemies/archer/run.png").use {
+                BitmapFactory.decodeStream(it)
+            }
+            splitVerticalSpriteSheet(archerRunSheet, 8, archerRunFrames)
+            CrashLogger.log("Loaded ARCHER run frames: ${archerRunFrames.size}")
         } catch (e: Exception) {
-            CrashLogger.log("ERROR: Failed to load ARCHER sprite: ${e.message}")
+            CrashLogger.log("ERROR: Failed to load ARCHER sprite sheets: ${e.message}")
+            e.printStackTrace()
         }
 
+        // Load shotgunner sprite sheets from assets and split into frames
         try {
-            bossSprites[EnemyType.SHOTGUNNER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_shotgunner)
-            CrashLogger.log("Loaded SHOTGUNNER sprite successfully")
+            // Idle: 6 frames @ 7 FPS
+            val shotgunnerIdleSheet = context.assets.open("enemies/shotgunner/idle.png").use {
+                BitmapFactory.decodeStream(it)
+            }
+            splitVerticalSpriteSheet(shotgunnerIdleSheet, 6, shotgunnerIdleFrames)
+            CrashLogger.log("Loaded SHOTGUNNER idle frames: ${shotgunnerIdleFrames.size}")
+
+            // Run: 8 frames @ 11 FPS
+            val shotgunnerRunSheet = context.assets.open("enemies/shotgunner/run.png").use {
+                BitmapFactory.decodeStream(it)
+            }
+            splitVerticalSpriteSheet(shotgunnerRunSheet, 8, shotgunnerRunFrames)
+            CrashLogger.log("Loaded SHOTGUNNER run frames: ${shotgunnerRunFrames.size}")
         } catch (e: Exception) {
-            CrashLogger.log("ERROR: Failed to load SHOTGUNNER sprite: ${e.message}")
+            CrashLogger.log("ERROR: Failed to load SHOTGUNNER sprite sheets: ${e.message}")
+            e.printStackTrace()
         }
+
         // Zombies use the enemies001-027 sprites loaded above
+    }
+
+    /**
+     * Splits a vertical sprite sheet into individual frame bitmaps.
+     * Frame height = sheet height / frame count.
+     * Pivot: bottom-center (consistent across all frames for no positional jitter).
+     */
+    private fun splitVerticalSpriteSheet(sheet: Bitmap, frameCount: Int, outputFrames: MutableList<Bitmap>) {
+        val frameHeight = sheet.height / frameCount
+        val frameWidth = sheet.width
+
+        for (i in 0 until frameCount) {
+            val yOffset = i * frameHeight
+            val frame = Bitmap.createBitmap(sheet, 0, yOffset, frameWidth, frameHeight)
+            outputFrames.add(frame)
+        }
     }
 
     fun pause() {
@@ -1232,11 +1287,43 @@ class GameView(context: Context) : View(context) {
                     }
                 }
 
-                // Update animation
-                e.animTime += dt
-                if (e.animTime >= 0.2f) {  // 5 FPS animation
-                    e.animTime = 0f
-                    e.animFrame = (e.animFrame + 1) % 3
+                // Determine movement state: compare current position to last position
+                val moveThreshold = 0.5f
+                val hasMoved = hypot((e.x - e.lastX).toDouble(), (e.y - e.lastY).toDouble()).toFloat() > moveThreshold
+                e.isRunning = hasMoved
+                e.lastX = e.x
+                e.lastY = e.y
+
+                // Update animation based on enemy type and movement state
+                when (e.type) {
+                    EnemyType.ARCHER, EnemyType.SHOTGUNNER -> {
+                        // Archer/Shotgunner: idle = 6 frames @ 7 FPS, run = 8 frames @ 11 FPS
+                        val fps = if (e.isRunning) 11f else 7f
+                        val frameCount = if (e.isRunning) 8 else 6
+                        val frameDuration = 1f / fps
+
+                        e.animTime += dt
+                        if (e.animTime >= frameDuration) {
+                            e.animTime = 0f
+                            e.animFrame = (e.animFrame + 1) % frameCount
+                        }
+                    }
+                    EnemyType.ZOMBIE -> {
+                        // Zombies use existing animation (3-frame cycles)
+                        e.animTime += dt
+                        if (e.animTime >= 0.2f) {  // 5 FPS animation
+                            e.animTime = 0f
+                            e.animFrame = (e.animFrame + 1) % 3
+                        }
+                    }
+                    else -> {
+                        // Boss or other types
+                        e.animTime += dt
+                        if (e.animTime >= 0.2f) {
+                            e.animTime = 0f
+                            e.animFrame = (e.animFrame + 1) % 3
+                        }
+                    }
                 }
             }
 
@@ -2624,9 +2711,22 @@ class GameView(context: Context) : View(context) {
             val animIndex = if (spriteSequence.size > 1) e.animFrame % spriteSequence.size else 0
             val spriteNumber = spriteSequence[animIndex]
 
-            // Get the sprite bitmap (archer/shotgunner use bossSprites map, zombies use enemySprites)
+            // Get the sprite bitmap based on enemy type and animation state
             val spriteBitmap = when (e.type) {
-                EnemyType.ARCHER, EnemyType.SHOTGUNNER -> bossSprites[e.type]
+                EnemyType.ARCHER -> {
+                    // Select frame from idle or run animation based on movement state
+                    val frames = if (e.isRunning) archerRunFrames else archerIdleFrames
+                    if (frames.isNotEmpty() && e.animFrame < frames.size) {
+                        frames[e.animFrame]
+                    } else null
+                }
+                EnemyType.SHOTGUNNER -> {
+                    // Select frame from idle or run animation based on movement state
+                    val frames = if (e.isRunning) shotgunnerRunFrames else shotgunnerIdleFrames
+                    if (frames.isNotEmpty() && e.animFrame < frames.size) {
+                        frames[e.animFrame]
+                    } else null
+                }
                 EnemyType.ZOMBIE -> enemySprites[spriteNumber]
                 else -> null
             }
