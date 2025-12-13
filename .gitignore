@@ -1,3 +1,6 @@
 # Claude AI project files
 .claude_docs
 .claude_roadmap.md
+
+# Claude Code build failure requests (processed)
+.claude-code-requests/processed/

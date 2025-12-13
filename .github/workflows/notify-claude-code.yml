@@ -1,0 +1,121 @@
+name: Notify Claude Code on Build Failure
+
+on:
+  workflow_run:
+    workflows: ["Build with Gradle"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  notify:
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      !contains(github.event.workflow_run.head_commit.message, '🤖 Auto-fix')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get build logs
+        id: logs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.payload.workflow_run.id;
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+
+            const failedJob = jobs.data.jobs.find(job => job.conclusion === 'failure');
+            if (!failedJob) return '';
+
+            // Get the job logs
+            const logs = await github.rest.actions.downloadJobLogsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              job_id: failedJob.id,
+            });
+
+            const logText = Buffer.from(logs.data).toString();
+
+            // Extract the error section (last 3000 chars which usually contains the error)
+            const errorSection = logText.slice(-3000);
+
+            // Try to find the actual error message
+            const errorMatch = errorSection.match(/error:.*?(?=\n\n|FAILURE|$)/s);
+            const error = errorMatch ? errorMatch[0] : errorSection;
+
+            return error;
+          result-encoding: string
+
+      - name: Create Claude Code fix request file
+        run: |
+          mkdir -p .claude-code-requests
+          cat > .claude-code-requests/build-failure-$(date +%s).md << 'EOF'
+          # 🚨 Build Failure - Auto-Fix Request
+
+          **Build failed at**: ${{ github.event.workflow_run.created_at }}
+          **Commit**: ${{ github.event.workflow_run.head_sha }}
+          **Branch**: ${{ github.event.workflow_run.head_branch }}
+          **Run URL**: ${{ github.event.workflow_run.html_url }}
+
+          ## Error Details
+
+          ```
+          ${{ steps.logs.outputs.result }}
+          ```
+
+          ## Action Required
+
+          Claude Code should:
+          1. Analyze the error above
+          2. Identify the root cause
+          3. Fix the issue in the code
+          4. Commit and push the fix
+
+          **Note**: This is an automated request. Fix and push when ready.
+          EOF
+
+      - name: Commit fix request to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .claude-code-requests/
+          git commit -m "🤖 Add build failure fix request for Claude Code" || exit 0
+          git push
+
+      - name: Create issue for tracking
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Build Failed - Claude Code Fix Needed',
+              body: `## Build Failure
+
+            **Status**: Waiting for Claude Code to fix
+            **Run**: ${{ github.event.workflow_run.html_url }}
+            **Commit**: ${{ github.event.workflow_run.head_sha }}
+
+            ### Error Preview
+            \`\`\`
+            ${{ steps.logs.outputs.result }}
+            \`\`\`
+
+            A fix request file has been created at \`.claude-code-requests/\`
+
+            **Claude Code**: Pull latest changes and check the \`.claude-code-requests/\` directory.`,
+              labels: ['build-failure', 'claude-code-needed']
+            });
+
+            // Comment on the commit
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: '${{ github.event.workflow_run.head_sha }}',
+              body: `🚨 Build failed! Issue #${issue.data.number} created for Claude Code to fix.`
+            });
