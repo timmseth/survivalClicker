@@ -1349,7 +1349,7 @@ class GameView(context: Context) : View(context) {
 
                     // Life Steal - heal based on damage dealt
                     if (lifeStealPercent > 0f) {
-                        val healAmount = finalDamage * lifeStealPercent
+                        val healAmount = (finalDamage * lifeStealPercent).toInt()
                         playerHp = kotlin.math.min(playerHp + healAmount, maxHp)
                     }
 
