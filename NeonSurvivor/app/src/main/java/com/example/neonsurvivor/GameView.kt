@@ -2774,7 +2774,7 @@ class GameView(context: Context) : View(context) {
                     else -> 0f
                 }
 
-                // Draw glow BEHIND sprite (green for zombies)
+                // Draw glow BEHIND sprite at actual hitbox position (green for zombies)
                 val glowRadius = e.getGlowRadius()
                 if (e.isZombie) {
                     // Zombies have green glow
@@ -2784,12 +2784,12 @@ class GameView(context: Context) : View(context) {
                         maskFilter = android.graphics.BlurMaskFilter(15f, android.graphics.BlurMaskFilter.Blur.NORMAL)
                         alpha = 180
                     }
-                    canvas.drawCircle(e.x + offsetX, e.y + offsetY, targetHeight / 3f + glowRadius, zombieGlowPaint)
+                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, zombieGlowPaint)
                 } else {
-                    canvas.drawCircle(e.x + offsetX, e.y + offsetY, targetHeight / 3f + glowRadius, enemyGlowPaint)
+                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, enemyGlowPaint)
                 }
 
-                // Flip horizontally if moving right
+                // Flip horizontally if moving right (around sprite center, not hitbox)
                 if (flipHorizontal) {
                     canvas.save()
                     canvas.scale(-1f, 1f, e.x + offsetX, e.y + offsetY)
