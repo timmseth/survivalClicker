@@ -564,7 +564,7 @@ class GameView(context: Context) : View(context) {
         }
 
         // Load boss sprites
-        bossSprites[EnemyType.BOSS_FLYING_EYE] = BitmapFactory.decodeResource(resources, R.drawable.boss_flyingeye)
+        bossSprites[EnemyType.BOSS_FLYING_EYE] = BitmapFactory.decodeResource(resources, R.drawable.run_right)  // Ball and chain bot
         bossSprites[EnemyType.BOSS_GOBLIN] = BitmapFactory.decodeResource(resources, R.drawable.boss_goblin)
         bossSprites[EnemyType.BOSS_MUSHROOM] = BitmapFactory.decodeResource(resources, R.drawable.boss_mushroom)
         bossSprites[EnemyType.BOSS_SKELETON] = BitmapFactory.decodeResource(resources, R.drawable.boss_skeleton)

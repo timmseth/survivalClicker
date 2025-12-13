@@ -129,6 +129,7 @@ class SplashScreenView(context: Context) : View(context) {
         // Button rectangles
         private var startButtonRect = RectF()
         private var settingsButtonRect = RectF()
+        private var creditsButtonRect = RectF()
 
         // Character selection
         private var selectedCharacter = 0  // 0=Biker, 1=Punk, 2=Cyborg
@@ -257,6 +258,13 @@ class SplashScreenView(context: Context) : View(context) {
                 h * 0.75f,
                 buttonCenterX + buttonWidth / 2f,
                 h * 0.75f + buttonHeight
+            )
+
+            creditsButtonRect = RectF(
+                buttonCenterX - buttonWidth / 2f,
+                h * 0.9f,
+                buttonCenterX + buttonWidth / 2f,
+                h * 0.9f + buttonHeight
             )
 
             // Position character spotlight (between SURVIVOR text and START button)
@@ -495,6 +503,16 @@ class SplashScreenView(context: Context) : View(context) {
                 buttonTextPaint
             )
 
+            // CREDITS button
+            canvas.drawRoundRect(creditsButtonRect, 20f, 20f, buttonBgPaint)
+            canvas.drawRoundRect(creditsButtonRect, 20f, 20f, buttonBorderPaint)
+            canvas.drawText(
+                "CREDITS",
+                creditsButtonRect.centerX(),
+                creditsButtonRect.centerY() + 20f,
+                buttonTextPaint
+            )
+
             // Ko-fi link at bottom
             val w = width.toFloat()
             val h = height.toFloat()
@@ -546,6 +564,13 @@ class SplashScreenView(context: Context) : View(context) {
                 if (settingsButtonRect.contains(x, y)) {
                     // Open settings
                     val intent = Intent(context, SettingsActivity::class.java)
+                    (context as Activity).startActivity(intent)
+                    return true
+                }
+
+                if (creditsButtonRect.contains(x, y)) {
+                    // Open credits
+                    val intent = Intent(context, CreditsActivity::class.java)
                     (context as Activity).startActivity(intent)
                     return true
                 }
