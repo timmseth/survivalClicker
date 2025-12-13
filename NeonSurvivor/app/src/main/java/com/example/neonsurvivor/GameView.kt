@@ -417,12 +417,13 @@ class GameView(context: Context) : View(context) {
         EXPLOSIVE_ROUNDS, // Bullets create small explosion on hit
         VAMPIRE,          // Heal 1 HP per enemy kill (stackable)
         SHIELD,           // Gain 1 shield that absorbs one hit
-        MAGNET,           // Attracts power-ups from farther away
+        MAGNET,           // Collects all green orbs on screen
         BULLET_TIME,      // Slow down time briefly when hit
         ORBITAL,          // Spinning bullet orbits around player
         LASER_SIGHT,      // Auto-aim assistance
         MULTISHOT,        // Fire an additional bullet (stackable)
-        SHOCKWAVE         // Create damaging wave on kill
+        SHOCKWAVE,        // Create damaging wave on kill
+        HEALTH            // Restore 25 HP
     }
     data class PowerUp(var x: Float, var y: Float, val type: PowerUpType, var vy: Float = 150f)
     data class GreenOrb(var x: Float, var y: Float, var vx: Float = 0f, var vy: Float = 0f)
@@ -521,12 +522,12 @@ class GameView(context: Context) : View(context) {
     private var critChance = 0f  // % chance for 3x damage
     private var hasBerserker = false
     private var hasPhasing = false
-    // Quantum Mirror - Paddle deflection system
-    private var quantumMirrorMaxPaddles = 0  // Total paddle capacity
-    private var quantumMirrorActivePaddles = 0  // Currently available paddles
-    private var quantumMirrorCooldown = 10f  // Seconds to regenerate one paddle
-    private var quantumMirrorRegenTimer = 0f  // Current regen timer
-    private var paddleAngleOffset = 0f  // Animation rotation for paddles
+    // Quantum Mirror - Orbiting drone system
+    private var quantumMirrorMaxPaddles = 0  // Number of drones (renamed for compatibility)
+    private var quantumMirrorActivePaddles = 0  // Not used for drones
+    private var quantumMirrorCooldown = 3f  // Fire rate in seconds
+    private var quantumMirrorRegenTimer = 0f  // Fire timer
+    private var paddleAngleOffset = 0f  // Orbit rotation angle
     private var hasFragmentDrive = false
     private var overclockTimer = 0f
     private var overclockActive = false
@@ -935,15 +936,43 @@ class GameView(context: Context) : View(context) {
             // Update barrier wave animation
             barrierWaveOffset += dt * 2f
 
-            // Quantum Mirror paddle regeneration
-            if (quantumMirrorMaxPaddles > 0 && quantumMirrorActivePaddles < quantumMirrorMaxPaddles) {
+            // Quantum Mirror drone firing
+            if (quantumMirrorMaxPaddles > 0) {
                 quantumMirrorRegenTimer += dt
                 if (quantumMirrorRegenTimer >= quantumMirrorCooldown) {
                     quantumMirrorRegenTimer = 0f
-                    quantumMirrorActivePaddles++
+                    // Fire bullets from each drone toward nearest enemy
+                    for (i in 0 until quantumMirrorMaxPaddles) {
+                        val angleStep = (2f * Math.PI.toFloat()) / quantumMirrorMaxPaddles
+                        val angle = angleStep * i + paddleAngleOffset
+                        val droneOrbitRadius = actualSpriteHeight / 2f + 35f
+                        val droneX = playerX + cos(angle.toDouble()).toFloat() * droneOrbitRadius
+                        val droneY = playerY + sin(angle.toDouble()).toFloat() * droneOrbitRadius
+
+                        // Find nearest enemy and fire toward them
+                        var nearestEnemy: Enemy? = null
+                        var nearestDist = Float.MAX_VALUE
+                        for (e in enemies) {
+                            val dist = hypot((e.x - droneX).toDouble(), (e.y - droneY).toDouble()).toFloat()
+                            if (dist < nearestDist) {
+                                nearestDist = dist
+                                nearestEnemy = e
+                            }
+                        }
+
+                        nearestEnemy?.let { target ->
+                            val dx = target.x - droneX
+                            val dy = target.y - droneY
+                            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                            val bulletSpeed = 600f
+                            val vx = (dx / dist) * bulletSpeed
+                            val vy = (dy / dist) * bulletSpeed
+                            bullets.add(Bullet(droneX, droneY, vx, vy, true))
+                        }
+                    }
                 }
             }
-            // Paddle rotation animation
+            // Drone orbit rotation animation
             paddleAngleOffset += dt * 1.5f
 
             // Prismatic Barrier AOE damage (level 7+)
@@ -1421,6 +1450,14 @@ class GameView(context: Context) : View(context) {
                             greenOrbs.add(GreenOrb(hitEnemy.x, hitEnemy.y))
                         }
 
+                        // 1% chance (1d100) to drop magnet or health pickup
+                        val rollD100 = Random.nextInt(100) + 1
+                        if (rollD100 == 1 && canSpawnPowerup) {
+                            // 50/50 chance between magnet and health
+                            val pickupType = if (Random.nextBoolean()) PowerUpType.MAGNET else PowerUpType.HEALTH
+                            powerUps.add(PowerUp(hitEnemy.x, hitEnemy.y, pickupType))
+                        }
+
                         // Vampire effect - heal on kill
                         if (vampireStacks > 0) {
                             playerHp = kotlin.math.min(playerHp + vampireStacks, maxHp)
@@ -1459,18 +1496,7 @@ class GameView(context: Context) : View(context) {
                 val dy = b.y - playerY
                 val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
-                // Quantum Mirror - paddle deflection (consume paddle to block bullet)
-                val paddleRadius = playerRadius * 2f  // Interception radius
-                if (quantumMirrorActivePaddles > 0 && dist < paddleRadius && dist >= playerRadius * 0.8f) {
-                    // Close enough for paddle to intercept - consume a paddle and destroy bullet
-                    quantumMirrorActivePaddles--
-                    quantumMirrorRegenTimer = 0f  // Reset regen timer
-                    bulletIt.remove()
-                    // Visual feedback - spawn some particles
-                    spawnBlood(b.x, b.y)
-                    continue
-                }
-
+                // Drones now fire automatically (no deflection), check player hit
                 if (dist < playerRadius && damageCooldown <= 0f) {
                     if (godMode) {
                         // God mode: just remove bullet, no damage or animations
@@ -1684,6 +1710,10 @@ class GameView(context: Context) : View(context) {
                             greenOrbs.clear()
                             "MAGNET"
                         }
+                        PowerUpType.HEALTH -> {
+                            playerHp = kotlin.math.min(playerHp + 25, maxHp)
+                            "HEALTH +25"
+                        }
                         PowerUpType.BULLET_TIME -> { hasBulletTime = true; "BULLET TIME" }
                         PowerUpType.ORBITAL -> { hasOrbital = true; "ORBITAL" }
                         PowerUpType.LASER_SIGHT -> { hasLaserSight = true; "LASER SIGHT" }
@@ -1887,24 +1917,29 @@ class GameView(context: Context) : View(context) {
 
         upgradeOptions.clear()
 
-        // Weighted randomized drop table
+        // Weighted randomized drop table with dynamic descriptions
         val dropTable = listOf(
-            UpgradeOption(UpgradeType.STASIS_CORE, "Stasis Core", "Player bullets slow enemy bullets", weight = 100),
+            UpgradeOption(UpgradeType.STASIS_CORE, "Stasis Core", if (hasStasisCore) "Already active" else "Player bullets slow enemy bullets", weight = 100),
             UpgradeOption(UpgradeType.OVERCLOCKER, "Overclocker", "2x fire rate for 5 seconds", weight = 120),
-            UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Quantum Mirror", "Adds deflection paddle (10s cooldown)", weight = 80),
-            UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", "Kills spawn 4 micro-projectiles", weight = 100),
-            UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Adds an additional parallel gun", weight = 40),  // Rare
+            UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Orbiting Drone",
+                when {
+                    quantumMirrorMaxPaddles == 0 -> "Fires every 3s"
+                    quantumMirrorCooldown > 3f -> "Fire rate: ${quantumMirrorCooldown}s → ${quantumMirrorCooldown - 1f}s"
+                    else -> "Add drone: $quantumMirrorMaxPaddles → ${quantumMirrorMaxPaddles + 1}"
+                }, weight = 80),
+            UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", if (hasFragmentDrive) "Already active" else "Kills spawn 4 micro-projectiles", weight = 100),
+            UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Guns: $gunCount → ${gunCount + 1}", weight = 40),  // Rare
             UpgradeOption(UpgradeType.CONVERT_TO_ORBS, "Orb Converter", "Convert all bullets to orbs", weight = 90),
             UpgradeOption(UpgradeType.CONVERT_TO_BULLETS, "Bullet Converter", "Convert all bullets to player bullets", weight = 110),
             UpgradeOption(UpgradeType.CONVERT_TO_HOMING, "Homing Converter", "Convert all bullets to homing shards", weight = 85),
             // New variety upgrades
-            UpgradeOption(UpgradeType.CHAIN_LIGHTNING, "Chain Lightning", "Bullets arc to 2 nearby enemies", weight = 95),
-            UpgradeOption(UpgradeType.FROST_AURA, "Frost Aura", "Slows enemies within 150px", weight = 105),
-            UpgradeOption(UpgradeType.RICOCHET, "Ricochet", "Bullets bounce to another enemy", weight = 90),
-            UpgradeOption(UpgradeType.LIFE_STEAL, "Life Steal", "+10% damage heals you", weight = 75),  // Powerful
-            UpgradeOption(UpgradeType.CRITICAL_HITS, "Critical Hits", "+15% chance for 3x damage", weight = 100),
-            UpgradeOption(UpgradeType.BERSERKER, "Berserker Mode", "+50% damage when HP < 30%", weight = 85),
-            UpgradeOption(UpgradeType.PHASING, "Phasing", "Walk through enemies safely", weight = 70)  // Very powerful
+            UpgradeOption(UpgradeType.CHAIN_LIGHTNING, "Chain Lightning", if (hasChainLightning) "Already active" else "Bullets arc to 2 nearby enemies", weight = 95),
+            UpgradeOption(UpgradeType.FROST_AURA, "Frost Aura", if (hasFrostAura) "Already active" else "Slows enemies within 150px", weight = 105),
+            UpgradeOption(UpgradeType.RICOCHET, "Ricochet", if (hasRicochet) "Already active" else "Bullets bounce to another enemy", weight = 90),
+            UpgradeOption(UpgradeType.LIFE_STEAL, "Life Steal", "${(lifeStealPercent * 100).toInt()}% → ${((lifeStealPercent + 0.1f) * 100).toInt()}% heal", weight = 75),
+            UpgradeOption(UpgradeType.CRITICAL_HITS, "Critical Hits", "${(critChance * 100).toInt()}% → ${((critChance + 0.15f) * 100).toInt()}% crit chance", weight = 100),
+            UpgradeOption(UpgradeType.BERSERKER, "Berserker Mode", if (hasBerserker) "Already active" else "+50% damage when HP < 30%", weight = 85),
+            UpgradeOption(UpgradeType.PHASING, "Phasing", if (hasPhasing) "Already active" else "Walk through enemies safely", weight = 70)
         )
 
         // Weighted random selection - pick 3 unique options
@@ -1939,19 +1974,18 @@ class GameView(context: Context) : View(context) {
             }
             UpgradeType.QUANTUM_MIRROR -> {
                 if (quantumMirrorMaxPaddles == 0) {
-                    // First upgrade: add first paddle
+                    // First upgrade: add first drone
                     quantumMirrorMaxPaddles = 1
-                    quantumMirrorActivePaddles = 1
-                    CrashLogger.log("Quantum Mirror: First paddle added")
-                } else if (quantumMirrorCooldown > 3f) {
-                    // Reduce cooldown (10s -> 7s -> 5s -> 3s)
-                    quantumMirrorCooldown -= 2f
-                    CrashLogger.log("Quantum Mirror: Cooldown reduced to ${quantumMirrorCooldown}s")
+                    quantumMirrorCooldown = 3f
+                    CrashLogger.log("Quantum Mirror: First drone added, fires every 3s")
+                } else if (quantumMirrorCooldown > 1f) {
+                    // Reduce fire cooldown (3s -> 2s -> 1s)
+                    quantumMirrorCooldown -= 1f
+                    CrashLogger.log("Quantum Mirror: Fire rate improved to ${quantumMirrorCooldown}s")
                 } else {
-                    // Add another paddle
+                    // Add another drone
                     quantumMirrorMaxPaddles++
-                    quantumMirrorActivePaddles++
-                    CrashLogger.log("Quantum Mirror: Paddle added. Total: $quantumMirrorMaxPaddles")
+                    CrashLogger.log("Quantum Mirror: Drone added. Total: $quantumMirrorMaxPaddles")
                 }
             }
             UpgradeType.FRAGMENT_DRIVE -> {
@@ -2575,6 +2609,7 @@ class GameView(context: Context) : View(context) {
                 PowerUpType.VAMPIRE -> "V"
                 PowerUpType.SHIELD -> "⬡"
                 PowerUpType.MAGNET -> "M"
+                PowerUpType.HEALTH -> "❤"
                 PowerUpType.BULLET_TIME -> "T"
                 PowerUpType.ORBITAL -> "O"
                 PowerUpType.LASER_SIGHT -> "L"
@@ -2735,52 +2770,53 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Draw Quantum Mirror paddles (orbit player closely)
+        // Draw Quantum Mirror orbiting drones
         if (quantumMirrorMaxPaddles > 0) {
-            val paddleOrbitRadius = actualSpriteHeight / 2f + 35f  // Close orbit
-            val paddlePaint = Paint().apply {
+            val droneOrbitRadius = actualSpriteHeight / 2f + 35f  // Close orbit
+            val dronePaint = Paint().apply {
                 color = Color.CYAN
                 style = Paint.Style.FILL
                 isAntiAlias = true
             }
-            val paddleBorderPaint = Paint().apply {
+            val droneBorderPaint = Paint().apply {
                 color = Color.WHITE
                 style = Paint.Style.STROKE
                 strokeWidth = 3f
                 isAntiAlias = true
             }
 
-            // Draw paddles evenly distributed around player
+            // Draw drones evenly distributed around player
             for (i in 0 until quantumMirrorMaxPaddles) {
                 val angleStep = (2f * Math.PI.toFloat()) / quantumMirrorMaxPaddles
                 val angle = angleStep * i + paddleAngleOffset
-                val paddleX = playerX + cos(angle.toDouble()).toFloat() * paddleOrbitRadius
-                val paddleY = playerY + sin(angle.toDouble()).toFloat() * paddleOrbitRadius
+                val droneX = playerX + cos(angle.toDouble()).toFloat() * droneOrbitRadius
+                val droneY = playerY + sin(angle.toDouble()).toFloat() * droneOrbitRadius
 
-                // Draw paddle as small rectangle (like pong paddle)
-                val paddleWidth = 20f
-                val paddleHeight = 6f
-
-                // Dim the paddle if it's depleted (only show active ones brightly)
-                if (i < quantumMirrorActivePaddles) {
-                    // Active paddle - bright cyan
-                    paddlePaint.alpha = 255
-                    paddleBorderPaint.alpha = 255
-                } else {
-                    // Depleted paddle - very dim to show it's recharging
-                    paddlePaint.alpha = 50
-                    paddleBorderPaint.alpha = 50
-                }
-
-                val paddleRect = RectF(
-                    paddleX - paddleWidth / 2f,
-                    paddleY - paddleHeight / 2f,
-                    paddleX + paddleWidth / 2f,
-                    paddleY + paddleHeight / 2f
-                )
-                canvas.drawRoundRect(paddleRect, 3f, 3f, paddlePaint)
-                canvas.drawRoundRect(paddleRect, 3f, 3f, paddleBorderPaint)
+                // Draw drone as small circle with glow
+                canvas.drawCircle(droneX, droneY, 12f, dronePaint)
+                canvas.drawCircle(droneX, droneY, 12f, droneBorderPaint)
+                // Add inner dot to make it look more like a drone
+                dronePaint.color = Color.WHITE
+                canvas.drawCircle(droneX, droneY, 4f, dronePaint)
+                dronePaint.color = Color.CYAN
             }
+        }
+
+        // Draw Frost Aura visual indicator (faint blue circle)
+        if (hasFrostAura) {
+            val frostAuraPaint = Paint().apply {
+                color = Color.argb(30, 100, 200, 255)  // Very faint blue
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            val frostAuraBorderPaint = Paint().apply {
+                color = Color.argb(80, 150, 220, 255)  // Slightly more visible border
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                isAntiAlias = true
+            }
+            canvas.drawCircle(playerX, playerY, 150f, frostAuraPaint)
+            canvas.drawCircle(playerX, playerY, 150f, frostAuraBorderPaint)
         }
 
         // Draw neon glow behind sprite (smaller radius)
@@ -2937,10 +2973,8 @@ class GameView(context: Context) : View(context) {
                     if (overclockActive) activeUpgrades.add("Overclocker - 2x fire rate (${overclockTimer.toInt()}s)")
                     else if (overclockTimer > 0f && !overclockActive) activeUpgrades.add("Overclocker (ready)")
                     if (quantumMirrorMaxPaddles > 0) {
-                        val regenTime = if (quantumMirrorActivePaddles < quantumMirrorMaxPaddles) {
-                            " (${(quantumMirrorCooldown - quantumMirrorRegenTimer).toInt()}s)"
-                        } else ""
-                        activeUpgrades.add("Quantum Mirror - ${quantumMirrorActivePaddles}/${quantumMirrorMaxPaddles} paddles$regenTime")
+                        val fireIn = (quantumMirrorCooldown - quantumMirrorRegenTimer).toInt()
+                        activeUpgrades.add("Orbiting Drones - ${quantumMirrorMaxPaddles}x (fires in ${fireIn}s)")
                     }
                     if (hasFragmentDrive) activeUpgrades.add("Fragment Drive - Kill fragments")
                     if (hasChainLightning) activeUpgrades.add("Chain Lightning - Arc to 2 enemies")
