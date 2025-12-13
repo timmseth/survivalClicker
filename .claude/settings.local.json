@@ -12,7 +12,10 @@
       "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/archer_idle_$i.png\")",
       "Bash(done)",
       "Bash(for i in {0..7})",
-      "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/archer_run_$i.png\")"
+      "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/archer_run_$i.png\")",
+      "Bash(for i in {0..5})",
+      "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/shotgunner_idle_$i.png\")",
+      "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/shotgunner_run_$i.png\")"
     ],
     "deny": [],
     "ask": []

@@ -609,23 +609,27 @@ class GameView(context: Context) : View(context) {
             e.printStackTrace()
         }
 
-        // Load shotgunner sprite sheets from assets and split into frames
+        // Load shotgunner individual frame files from drawable resources
         try {
             // Idle: 6 frames @ 7 FPS
-            val shotgunnerIdleSheet = context.assets.open("enemies/shotgunner/idle.png").use {
-                BitmapFactory.decodeStream(it)
+            for (i in 0..5) {
+                val resourceId = resources.getIdentifier("shotgunner_idle_$i", "drawable", context.packageName)
+                if (resourceId != 0) {
+                    shotgunnerIdleFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+                }
             }
-            splitVerticalSpriteSheet(shotgunnerIdleSheet, 6, shotgunnerIdleFrames)
             CrashLogger.log("Loaded SHOTGUNNER idle frames: ${shotgunnerIdleFrames.size}")
 
             // Run: 8 frames @ 11 FPS
-            val shotgunnerRunSheet = context.assets.open("enemies/shotgunner/run.png").use {
-                BitmapFactory.decodeStream(it)
+            for (i in 0..7) {
+                val resourceId = resources.getIdentifier("shotgunner_run_$i", "drawable", context.packageName)
+                if (resourceId != 0) {
+                    shotgunnerRunFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+                }
             }
-            splitVerticalSpriteSheet(shotgunnerRunSheet, 8, shotgunnerRunFrames)
             CrashLogger.log("Loaded SHOTGUNNER run frames: ${shotgunnerRunFrames.size}")
         } catch (e: Exception) {
-            CrashLogger.log("ERROR: Failed to load SHOTGUNNER sprite sheets: ${e.message}")
+            CrashLogger.log("ERROR: Failed to load SHOTGUNNER sprite frames: ${e.message}")
             e.printStackTrace()
         }
 
@@ -1300,10 +1304,22 @@ class GameView(context: Context) : View(context) {
 
                 // Update animation based on enemy type and movement state
                 when (e.type) {
-                    EnemyType.ARCHER, EnemyType.SHOTGUNNER -> {
-                        // Archer/Shotgunner: idle = 5 frames @ 7 FPS, run = 8 frames @ 11 FPS
+                    EnemyType.ARCHER -> {
+                        // Archer: idle = 5 frames @ 7 FPS, run = 8 frames @ 11 FPS
                         val fps = if (e.isRunning) 11f else 7f
                         val frameCount = if (e.isRunning) 8 else 5
+                        val frameDuration = 1f / fps
+
+                        e.animTime += dt
+                        if (e.animTime >= frameDuration) {
+                            e.animTime = 0f
+                            e.animFrame = (e.animFrame + 1) % frameCount
+                        }
+                    }
+                    EnemyType.SHOTGUNNER -> {
+                        // Shotgunner: idle = 6 frames @ 7 FPS, run = 8 frames @ 11 FPS
+                        val fps = if (e.isRunning) 11f else 7f
+                        val frameCount = if (e.isRunning) 8 else 6
                         val frameDuration = 1f / fps
 
                         e.animTime += dt
