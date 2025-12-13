@@ -719,31 +719,36 @@ class GameView(context: Context) : View(context) {
 
         // TEST MODE: Wave 1 spawns 3 of each enemy type for testing
         if (wave == 1) {
-            CrashLogger.log("TEST WAVE 1: Spawning 3 of each enemy type")
-            val testTypes = listOf(EnemyType.ZOMBIE, EnemyType.ARCHER, EnemyType.SHOTGUNNER)
+            try {
+                CrashLogger.log("TEST WAVE 1: Spawning 3 of each enemy type")
+                val testTypes = listOf(EnemyType.ZOMBIE, EnemyType.ARCHER, EnemyType.SHOTGUNNER)
 
-            for (type in testTypes) {
-                for (j in 0 until 3) {
-                    val edge = rnd.nextInt(4)
-                    val ex: Float
-                    val ey: Float
-                    when (edge) {
-                        0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
-                        1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
-                        2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
-                        else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                for (type in testTypes) {
+                    for (j in 0 until 3) {
+                        val edge = rnd.nextInt(4)
+                        val ex: Float
+                        val ey: Float
+                        when (edge) {
+                            0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
+                            1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
+                            2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                            else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                        }
+
+                        val hp = 20f
+                        val baseSpeed = 80f
+                        val isZombie = type == EnemyType.ZOMBIE
+                        val zombieScaleFactor = if (isZombie) 1.25f else 1f
+                        val zombieRadius = 24f * zombieScaleFactor
+
+                        val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, hp, hp, type, isZombie = isZombie)
+                        enemies.add(enemy)
+                        CrashLogger.log("Spawned test enemy: $type at ($ex, $ey)")
                     }
-
-                    val hp = 20f
-                    val baseSpeed = 80f
-                    val isZombie = type == EnemyType.ZOMBIE
-                    val zombieScaleFactor = if (isZombie) 1.25f else 1f
-                    val zombieRadius = 24f * zombieScaleFactor
-
-                    val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, hp, hp, type, isZombie = isZombie)
-                    enemies.add(enemy)
-                    CrashLogger.log("Spawned test enemy: $type at ($ex, $ey)")
                 }
+            } catch (e: Exception) {
+                CrashLogger.log("ERROR spawning wave 1 test enemies: ${e.message}")
+                e.printStackTrace()
             }
         } else {
             // NORMAL MODE: Regular wave spawning for wave 2+
@@ -1662,14 +1667,15 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun handleEnemyShooting(dt: Float) {
-        // Dynamic cooldown based on enemy count to reduce bullet spam
-        val crowdPenalty = (enemies.size / 25f).coerceIn(0f, 3f)
+        try {
+            // Dynamic cooldown based on enemy count to reduce bullet spam
+            val crowdPenalty = (enemies.size / 25f).coerceIn(0f, 3f)
 
-        for (e in enemies) {
-            // Zombies don't shoot - skip them
-            if (e.isZombie) continue
+            for (e in enemies) {
+                // Zombies don't shoot - skip them
+                if (e.isZombie) continue
 
-            if (e.shootCooldown <= 0f) {
+                if (e.shootCooldown <= 0f) {
                 // Check bullet cap before allowing shooting
                 if (bullets.size >= MAX_BULLETS) {
                     e.shootCooldown = 1f // Try again in 1 second
@@ -1728,6 +1734,9 @@ class GameView(context: Context) : View(context) {
                     }
                 }
             }
+        } catch (e: Exception) {
+            CrashLogger.log("ERROR in handleEnemyShooting: ${e.message}")
+            e.printStackTrace()
         }
     }
 
