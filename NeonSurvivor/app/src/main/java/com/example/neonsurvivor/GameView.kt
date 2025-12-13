@@ -194,6 +194,11 @@ class GameView(context: Context) : View(context) {
         isAntiAlias = true
         maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
     }
+    private val fallbackSpritePaint = Paint().apply {
+        color = Color.MAGENTA  // Bright pink fallback for missing sprites
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
     private val powerUpIconPaint = Paint().apply {
         color = Color.BLACK
         textSize = 28f
@@ -560,10 +565,27 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Load enemy type sprites
-        bossSprites[EnemyType.BOSS_BALLCHAIN] = BitmapFactory.decodeResource(resources, R.drawable.boss_ballchain)
-        bossSprites[EnemyType.ARCHER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_archer)
-        bossSprites[EnemyType.SHOTGUNNER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_shotgunner)
+        // Load enemy type sprites with error handling
+        try {
+            bossSprites[EnemyType.BOSS_BALLCHAIN] = BitmapFactory.decodeResource(resources, R.drawable.boss_ballchain)
+            CrashLogger.log("Loaded BOSS_BALLCHAIN sprite successfully")
+        } catch (e: Exception) {
+            CrashLogger.log("ERROR: Failed to load BOSS_BALLCHAIN sprite: ${e.message}")
+        }
+
+        try {
+            bossSprites[EnemyType.ARCHER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_archer)
+            CrashLogger.log("Loaded ARCHER sprite successfully")
+        } catch (e: Exception) {
+            CrashLogger.log("ERROR: Failed to load ARCHER sprite: ${e.message}")
+        }
+
+        try {
+            bossSprites[EnemyType.SHOTGUNNER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_shotgunner)
+            CrashLogger.log("Loaded SHOTGUNNER sprite successfully")
+        } catch (e: Exception) {
+            CrashLogger.log("ERROR: Failed to load SHOTGUNNER sprite: ${e.message}")
+        }
         // Zombies use the enemies001-027 sprites loaded above
     }
 
@@ -2525,6 +2547,11 @@ class GameView(context: Context) : View(context) {
                     if (flipHorizontal) {
                         canvas.restore()
                     }
+                } else {
+                    // FALLBACK: Draw pink circle for boss if sprite failed to load
+                    val bossSize = 120f
+                    CrashLogger.log("WARNING: Missing sprite for boss type ${e.type}, drawing fallback")
+                    canvas.drawCircle(e.x, e.y, bossSize / 2f, fallbackSpritePaint)
                 }
                 continue  // Skip normal enemy rendering
             }
@@ -2637,6 +2664,11 @@ class GameView(context: Context) : View(context) {
                 if (flipHorizontal) {
                     canvas.restore()
                 }
+            } else {
+                // FALLBACK: Draw pink circle if sprite failed to load
+                val enemySize = if (e.isZombie) 75f else 60f
+                CrashLogger.log("WARNING: Missing sprite for enemy type ${e.type}, drawing fallback")
+                canvas.drawCircle(e.x, e.y, enemySize / 2f, fallbackSpritePaint)
             }
         }
 
