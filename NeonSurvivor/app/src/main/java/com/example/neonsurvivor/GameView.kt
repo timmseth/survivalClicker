@@ -2762,6 +2762,18 @@ class GameView(context: Context) : View(context) {
                 val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
                 val targetWidth = targetHeight * aspectRatio
 
+                // Position offsets to fix sprite centering (down and left from current position)
+                val offsetX = when (e.type) {
+                    EnemyType.SHOTGUNNER -> -40f  // Move left (was too far right)
+                    EnemyType.ARCHER -> -10f  // Slightly left
+                    else -> 0f
+                }
+                val offsetY = when (e.type) {
+                    EnemyType.SHOTGUNNER -> 40f  // Move down (was too far up)
+                    EnemyType.ARCHER -> 10f  // Slightly down
+                    else -> 0f
+                }
+
                 // Draw glow BEHIND sprite (green for zombies)
                 val glowRadius = e.getGlowRadius()
                 if (e.isZombie) {
@@ -2772,23 +2784,23 @@ class GameView(context: Context) : View(context) {
                         maskFilter = android.graphics.BlurMaskFilter(15f, android.graphics.BlurMaskFilter.Blur.NORMAL)
                         alpha = 180
                     }
-                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, zombieGlowPaint)
+                    canvas.drawCircle(e.x + offsetX, e.y + offsetY, targetHeight / 3f + glowRadius, zombieGlowPaint)
                 } else {
-                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, enemyGlowPaint)
+                    canvas.drawCircle(e.x + offsetX, e.y + offsetY, targetHeight / 3f + glowRadius, enemyGlowPaint)
                 }
 
                 // Flip horizontally if moving right
                 if (flipHorizontal) {
                     canvas.save()
-                    canvas.scale(-1f, 1f, e.x, e.y)
+                    canvas.scale(-1f, 1f, e.x + offsetX, e.y + offsetY)
                 }
 
                 // Anchor at bottom-center for proper grounding (pivot point)
                 val dstRect = RectF(
-                    e.x - targetWidth / 2f,
-                    e.y - targetHeight,  // Bottom-center anchor
-                    e.x + targetWidth / 2f,
-                    e.y
+                    e.x + offsetX - targetWidth / 2f,
+                    e.y + offsetY - targetHeight,  // Bottom-center anchor
+                    e.x + offsetX + targetWidth / 2f,
+                    e.y + offsetY
                 )
 
                 // Draw sprite with green tint for zombies
