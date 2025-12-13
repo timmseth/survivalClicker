@@ -1570,8 +1570,11 @@ class GameView(context: Context) : View(context) {
                     if (hasSpreadShot) {
                         // Fire 3 bullets in a spread per shot
                         val spreadAngle = 0.3f
+                        // Cap multishot spread to 45 degrees total (0.785 radians)
+                        val maxSpread = 0.785f
+                        val spreadPerShot = if (totalShots > 1) (maxSpread / totalShots).coerceAtMost(0.2f) else 0f
                         for (shot in 0 until totalShots) {
-                            val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.2f else 0f
+                            val angleOffset = if (totalShots > 1) (shot - (totalShots - 1) / 2f) * spreadPerShot else 0f
                             for (i in -1..1) {
                                 if (bullets.size >= MAX_BULLETS) break
                                 val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle + angleOffset
@@ -1582,9 +1585,12 @@ class GameView(context: Context) : View(context) {
                         }
                     } else {
                         // Fire multiple shots in a tight spread
+                        // Cap multishot spread to 30 degrees total (0.524 radians)
+                        val maxSpread = 0.524f
+                        val spreadPerShot = if (totalShots > 1) (maxSpread / totalShots).coerceAtMost(0.15f) else 0f
                         for (shot in 0 until totalShots) {
                             if (bullets.size >= MAX_BULLETS) break
-                            val angleOffset = if (totalShots > 1) (shot - totalShots / 2f) * 0.15f else 0f
+                            val angleOffset = if (totalShots > 1) (shot - (totalShots - 1) / 2f) * spreadPerShot else 0f
                             val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + angleOffset
                             val vx = cos(angle) * bulletSpeed
                             val vy = sin(angle) * bulletSpeed
