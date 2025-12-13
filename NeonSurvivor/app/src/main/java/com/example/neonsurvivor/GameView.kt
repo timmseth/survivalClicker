@@ -717,37 +717,41 @@ class GameView(context: Context) : View(context) {
             CrashLogger.log("Boss wave detected for wave $wave")
         }
 
-        // TEST MODE: Wave 1 spawns 3 of each enemy type for testing
-        if (wave == 1) {
+        // TEST MODE: Waves 1-3 test one enemy type each to isolate crashes
+        if (wave in 1..3) {
             try {
-                CrashLogger.log("TEST WAVE 1: Spawning 1 of each enemy type")
-                val testTypes = listOf(EnemyType.ZOMBIE, EnemyType.ARCHER, EnemyType.SHOTGUNNER)
+                val testType = when (wave) {
+                    1 -> EnemyType.ZOMBIE
+                    2 -> EnemyType.ARCHER
+                    3 -> EnemyType.SHOTGUNNER
+                    else -> EnemyType.ZOMBIE
+                }
 
-                for (type in testTypes) {
-                    for (j in 0 until 1) {
-                        val edge = rnd.nextInt(4)
-                        val ex: Float
-                        val ey: Float
-                        when (edge) {
-                            0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
-                            1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
-                            2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
-                            else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
-                        }
+                CrashLogger.log("TEST WAVE $wave: Spawning 3 $testType enemies")
 
-                        val hp = 20f
-                        val baseSpeed = 80f
-                        val isZombie = type == EnemyType.ZOMBIE
-                        val zombieScaleFactor = if (isZombie) 1.25f else 1f
-                        val zombieRadius = 24f * zombieScaleFactor
-
-                        val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, hp, hp, type, isZombie = isZombie)
-                        enemies.add(enemy)
-                        CrashLogger.log("Spawned test enemy: $type at ($ex, $ey)")
+                for (j in 0 until 3) {
+                    val edge = rnd.nextInt(4)
+                    val ex: Float
+                    val ey: Float
+                    when (edge) {
+                        0 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY - height/2f - 60f }
+                        1 -> { ex = playerX - width/2f + rnd.nextFloat() * width; ey = playerY + height/2f + 60f }
+                        2 -> { ex = playerX - width/2f - 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
+                        else -> { ex = playerX + width/2f + 60f; ey = playerY - height/2f + rnd.nextFloat() * height }
                     }
+
+                    val hp = 20f
+                    val baseSpeed = 80f
+                    val isZombie = testType == EnemyType.ZOMBIE
+                    val zombieScaleFactor = if (isZombie) 1.25f else 1f
+                    val zombieRadius = 24f * zombieScaleFactor
+
+                    val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, hp, hp, testType, isZombie = isZombie)
+                    enemies.add(enemy)
+                    CrashLogger.log("Spawned test enemy: $testType at ($ex, $ey)")
                 }
             } catch (e: Exception) {
-                CrashLogger.log("ERROR spawning wave 1 test enemies: ${e.message}")
+                CrashLogger.log("ERROR spawning test wave $wave: ${e.message}")
                 e.printStackTrace()
             }
         } else {
