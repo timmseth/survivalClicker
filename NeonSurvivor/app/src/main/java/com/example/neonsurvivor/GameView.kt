@@ -498,6 +498,14 @@ class GameView(context: Context) : View(context) {
         STASIS_CORE, OVERCLOCKER, QUANTUM_MIRROR, FRAGMENT_DRIVE,
         CONVERT_TO_ORBS, CONVERT_TO_BULLETS, CONVERT_TO_HOMING,
         MULTI_GUN,  // Adds an additional gun
+        // New variety upgrades
+        CHAIN_LIGHTNING,  // Bullets chain to nearby enemies
+        FROST_AURA,       // Slows enemies near player
+        RICOCHET,         // Bullets bounce between enemies
+        LIFE_STEAL,       // Player bullets heal on hit (% based)
+        CRITICAL_HITS,    // Chance for 3x damage bullets
+        BERSERKER,        // +50% damage when below 30% HP
+        PHASING,          // Walk through enemies (no contact damage)
         // Basic stat upgrades removed from wave-end (moved to orb shop only)
     }
 
@@ -506,6 +514,13 @@ class GameView(context: Context) : View(context) {
 
     // Active special upgrade effects
     private var hasStasisCore = false
+    private var hasChainLightning = false
+    private var hasFrostAura = false
+    private var hasRicochet = false
+    private var lifeStealPercent = 0f  // % of damage that heals player
+    private var critChance = 0f  // % chance for 3x damage
+    private var hasBerserker = false
+    private var hasPhasing = false
     // Quantum Mirror - Paddle deflection system
     private var quantumMirrorMaxPaddles = 0  // Total paddle capacity
     private var quantumMirrorActivePaddles = 0  // Currently available paddles
@@ -1090,8 +1105,15 @@ class GameView(context: Context) : View(context) {
             if (dist > 1f) {
                 val nx = dx / dist
                 val ny = dy / dist
-                val newX = e.x + nx * e.speed * dt
-                val newY = e.y + ny * e.speed * dt
+
+                // Frost Aura - slow enemies within 150px
+                var speedMultiplier = 1f
+                if (hasFrostAura && dist < 150f) {
+                    speedMultiplier = 0.4f  // 60% slow
+                }
+
+                val newX = e.x + nx * e.speed * speedMultiplier * dt
+                val newY = e.y + ny * e.speed * speedMultiplier * dt
 
                 // Simple wall pathfinding: if blocked, try sliding along wall
                 var blockedByWall = false
@@ -1110,7 +1132,7 @@ class GameView(context: Context) : View(context) {
                     e.y = newY
                 } else {
                     // Try moving just in X or Y direction to slide around wall
-                    val tryX = e.x + nx * e.speed * dt
+                    val tryX = e.x + nx * e.speed * speedMultiplier * dt
                     var canMoveX = true
                     for (wall in walls) {
                         if (tryX - e.radius < wall.x + wall.width &&
@@ -1125,7 +1147,7 @@ class GameView(context: Context) : View(context) {
                         e.x = tryX
                     } else {
                         // Try moving just in Y
-                        val tryY = e.y + ny * e.speed * dt
+                        val tryY = e.y + ny * e.speed * speedMultiplier * dt
                         var canMoveY = true
                         for (wall in walls) {
                             if (e.x - e.radius < wall.x + wall.width &&
@@ -1160,6 +1182,9 @@ class GameView(context: Context) : View(context) {
                     // God mode: deal massive damage to enemy to instantly kill them
                     e.hp -= 9999
                     // Enemy will be removed by normal enemy cleanup code
+                } else if (hasPhasing) {
+                    // Phasing - walk through enemies without taking contact damage
+                    // No damage, no feedback, just ignore collision
                 } else {
                     // Normal damage behavior
                     // Priority: Shield powerup > Barrier shield > HP
@@ -1305,9 +1330,71 @@ class GameView(context: Context) : View(context) {
                     }
                 }
                 if (hitEnemy != null) {
-                    hitEnemy.hp -= bulletDamage
+                    // Calculate final damage with modifiers
+                    var finalDamage = bulletDamage
+
+                    // Berserker - +50% damage when HP < 30%
+                    if (hasBerserker && playerHp < maxHp * 0.3f) {
+                        finalDamage *= 1.5f
+                    }
+
+                    // Critical Hits - chance for 3x damage
+                    val isCrit = Random.nextFloat() < critChance
+                    if (isCrit) {
+                        finalDamage *= 3f
+                    }
+
+                    hitEnemy.hp -= finalDamage
                     spawnBlood(hitEnemy.x, hitEnemy.y)
-                    if (!hasPiercing) {
+
+                    // Life Steal - heal based on damage dealt
+                    if (lifeStealPercent > 0f) {
+                        val healAmount = finalDamage * lifeStealPercent
+                        playerHp = min(playerHp + healAmount, maxHp)
+                    }
+
+                    // Chain Lightning - arc to 2 nearby enemies
+                    if (hasChainLightning) {
+                        val chainedEnemies = enemies
+                            .filter { it != hitEnemy }
+                            .sortedBy { hypot((it.x - hitEnemy.x).toDouble(), (it.y - hitEnemy.y).toDouble()) }
+                            .take(2)
+
+                        for (chainTarget in chainedEnemies) {
+                            val chainDist = hypot((chainTarget.x - hitEnemy.x).toDouble(), (chainTarget.y - hitEnemy.y).toDouble()).toFloat()
+                            if (chainDist < 200f) {  // Chain range
+                                chainTarget.hp -= finalDamage * 0.5f  // 50% damage on chain
+                                spawnBlood(chainTarget.x, chainTarget.y)
+                            }
+                        }
+                    }
+
+                    // Ricochet - bounce to another enemy (only if not piercing)
+                    if (hasRicochet && !hasPiercing) {
+                        val ricochetTarget = enemies
+                            .filter { it != hitEnemy }
+                            .minByOrNull { hypot((it.x - hitEnemy.x).toDouble(), (it.y - hitEnemy.y).toDouble()) }
+
+                        if (ricochetTarget != null) {
+                            val ricochetDist = hypot((ricochetTarget.x - hitEnemy.x).toDouble(), (ricochetTarget.y - hitEnemy.y).toDouble()).toFloat()
+                            if (ricochetDist < 300f) {  // Ricochet range
+                                // Calculate new bullet velocity toward ricochet target
+                                val dx = ricochetTarget.x - hitEnemy.x
+                                val dy = ricochetTarget.y - hitEnemy.y
+                                val len = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                                val speed = 800f
+                                b.vx = (dx / len) * speed
+                                b.vy = (dy / len) * speed
+                                b.x = hitEnemy.x
+                                b.y = hitEnemy.y
+                                // Don't remove bullet - it ricochets
+                            } else {
+                                bulletIt.remove()
+                            }
+                        } else {
+                            bulletIt.remove()
+                        }
+                    } else if (!hasPiercing) {
                         bulletIt.remove() // Remove bullet unless piercing
                     }
                     if (hitEnemy.hp <= 0f) {
@@ -1809,7 +1896,15 @@ class GameView(context: Context) : View(context) {
             UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Adds an additional parallel gun", weight = 40),  // Rare
             UpgradeOption(UpgradeType.CONVERT_TO_ORBS, "Orb Converter", "Convert all bullets to orbs", weight = 90),
             UpgradeOption(UpgradeType.CONVERT_TO_BULLETS, "Bullet Converter", "Convert all bullets to player bullets", weight = 110),
-            UpgradeOption(UpgradeType.CONVERT_TO_HOMING, "Homing Converter", "Convert all bullets to homing shards", weight = 85)
+            UpgradeOption(UpgradeType.CONVERT_TO_HOMING, "Homing Converter", "Convert all bullets to homing shards", weight = 85),
+            // New variety upgrades
+            UpgradeOption(UpgradeType.CHAIN_LIGHTNING, "Chain Lightning", "Bullets arc to 2 nearby enemies", weight = 95),
+            UpgradeOption(UpgradeType.FROST_AURA, "Frost Aura", "Slows enemies within 150px", weight = 105),
+            UpgradeOption(UpgradeType.RICOCHET, "Ricochet", "Bullets bounce to another enemy", weight = 90),
+            UpgradeOption(UpgradeType.LIFE_STEAL, "Life Steal", "+10% damage heals you", weight = 75),  // Powerful
+            UpgradeOption(UpgradeType.CRITICAL_HITS, "Critical Hits", "+15% chance for 3x damage", weight = 100),
+            UpgradeOption(UpgradeType.BERSERKER, "Berserker Mode", "+50% damage when HP < 30%", weight = 85),
+            UpgradeOption(UpgradeType.PHASING, "Phasing", "Walk through enemies safely", weight = 70)  // Very powerful
         )
 
         // Weighted random selection - pick 3 unique options
@@ -1878,6 +1973,34 @@ class GameView(context: Context) : View(context) {
             UpgradeType.CONVERT_TO_HOMING -> {
                 CrashLogger.log("Converting bullets to homing. Bullet count: ${bullets.size}, Enemy count: ${enemies.size}")
                 convertAllBulletsToHoming()
+            }
+            UpgradeType.CHAIN_LIGHTNING -> {
+                hasChainLightning = true
+                CrashLogger.log("Chain Lightning activated")
+            }
+            UpgradeType.FROST_AURA -> {
+                hasFrostAura = true
+                CrashLogger.log("Frost Aura activated")
+            }
+            UpgradeType.RICOCHET -> {
+                hasRicochet = true
+                CrashLogger.log("Ricochet activated")
+            }
+            UpgradeType.LIFE_STEAL -> {
+                lifeStealPercent += 0.1f  // +10% per upgrade
+                CrashLogger.log("Life Steal upgraded: ${(lifeStealPercent * 100).toInt()}%")
+            }
+            UpgradeType.CRITICAL_HITS -> {
+                critChance += 0.15f  // +15% per upgrade
+                CrashLogger.log("Critical Hit chance upgraded: ${(critChance * 100).toInt()}%")
+            }
+            UpgradeType.BERSERKER -> {
+                hasBerserker = true
+                CrashLogger.log("Berserker Mode activated")
+            }
+            UpgradeType.PHASING -> {
+                hasPhasing = true
+                CrashLogger.log("Phasing activated")
             }
         }
         wave += 1
@@ -2820,6 +2943,13 @@ class GameView(context: Context) : View(context) {
                         activeUpgrades.add("Quantum Mirror - ${quantumMirrorActivePaddles}/${quantumMirrorMaxPaddles} paddles$regenTime")
                     }
                     if (hasFragmentDrive) activeUpgrades.add("Fragment Drive - Kill fragments")
+                    if (hasChainLightning) activeUpgrades.add("Chain Lightning - Arc to 2 enemies")
+                    if (hasFrostAura) activeUpgrades.add("Frost Aura - 60% slow in 150px")
+                    if (hasRicochet) activeUpgrades.add("Ricochet - Bullets bounce")
+                    if (lifeStealPercent > 0f) activeUpgrades.add("Life Steal - ${(lifeStealPercent * 100).toInt()}% heal")
+                    if (critChance > 0f) activeUpgrades.add("Critical Hits - ${(critChance * 100).toInt()}% for 3x dmg")
+                    if (hasBerserker) activeUpgrades.add("Berserker - +50% dmg at low HP")
+                    if (hasPhasing) activeUpgrades.add("Phasing - Walk through enemies")
 
                     if (activeUpgrades.isNotEmpty()) {
                         canvas.drawText("ACTIVE UPGRADES", menuLeft + menuWidth / 2f, upgradeYPos, upgradeTitlePaint)
