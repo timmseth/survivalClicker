@@ -2620,8 +2620,8 @@ class GameView(context: Context) : View(context) {
             // Determine if we need to flip horizontally (moving right)
             val flipHorizontal = absX >= absY && dx > 0
 
-            // Get current animation frame (cycle through 3 frames)
-            val animIndex = e.animFrame % 3
+            // Get current animation frame (cycle through available frames)
+            val animIndex = if (spriteSequence.size > 1) e.animFrame % spriteSequence.size else 0
             val spriteNumber = spriteSequence[animIndex]
 
             // Get the sprite bitmap (archer/shotgunner use bossSprites map, zombies use enemySprites)
