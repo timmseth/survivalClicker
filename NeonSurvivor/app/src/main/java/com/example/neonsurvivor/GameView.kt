@@ -2735,8 +2735,12 @@ class GameView(context: Context) : View(context) {
                 else -> null
             }
             if (spriteBitmap != null) {
-                // Draw sprite (zombies are 25% larger)
-                val enemySize = if (e.isZombie) 75f else 60f
+                // Draw sprite - different sizes per enemy type
+                val enemySize = when (e.type) {
+                    EnemyType.ARCHER, EnemyType.SHOTGUNNER -> 240f  // 4x size for ranged enemies
+                    EnemyType.ZOMBIE -> 75f  // 25% larger than base
+                    else -> 60f  // Base size
+                }
 
                 // Draw glow BEHIND sprite (green for zombies)
                 val glowRadius = e.getGlowRadius()
