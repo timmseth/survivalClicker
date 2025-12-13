@@ -1862,7 +1862,7 @@ class GameView(context: Context) : View(context) {
             val ey = playerY + sin(angle) * distance
             val baseSpeed = 100f + wave * 15f
             val hp = 30f + wave * 10f
-            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, hp, EnemyType.CIRCLE))
+            enemies.add(Enemy(ex, ey, 24f, baseSpeed, hp, hp, EnemyType.ZOMBIE))
         }
     }
 
