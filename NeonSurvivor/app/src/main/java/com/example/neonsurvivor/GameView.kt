@@ -720,11 +720,11 @@ class GameView(context: Context) : View(context) {
         // TEST MODE: Wave 1 spawns 3 of each enemy type for testing
         if (wave == 1) {
             try {
-                CrashLogger.log("TEST WAVE 1: Spawning 3 of each enemy type")
+                CrashLogger.log("TEST WAVE 1: Spawning 1 of each enemy type")
                 val testTypes = listOf(EnemyType.ZOMBIE, EnemyType.ARCHER, EnemyType.SHOTGUNNER)
 
                 for (type in testTypes) {
-                    for (j in 0 until 3) {
+                    for (j in 0 until 1) {
                         val edge = rnd.nextInt(4)
                         val ex: Float
                         val ey: Float
