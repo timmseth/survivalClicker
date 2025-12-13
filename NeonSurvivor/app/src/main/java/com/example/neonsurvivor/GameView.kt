@@ -363,7 +363,7 @@ class GameView(context: Context) : View(context) {
         style = Paint.Style.FILL
     }
 
-    enum class EnemyType { CIRCLE, TRIANGLE, SQUARE, PENTAGON, HEXAGON, BOSS_FLYING_EYE, BOSS_GOBLIN, BOSS_MUSHROOM, BOSS_SKELETON }
+    enum class EnemyType { ZOMBIE, ARCHER, SHOTGUNNER, BOSS_BALLCHAIN }
 
     data class Enemy(
         var x: Float,
@@ -380,12 +380,10 @@ class GameView(context: Context) : View(context) {
         val isZombie: Boolean = false  // Melee-only enemy, no shooting, 2x contact damage
     ) {
         fun getCornerCount(): Int = when(type) {
-            EnemyType.CIRCLE -> 0
-            EnemyType.TRIANGLE -> 3
-            EnemyType.SQUARE -> 4
-            EnemyType.PENTAGON -> 5
-            EnemyType.HEXAGON -> 6
-            EnemyType.BOSS_FLYING_EYE, EnemyType.BOSS_GOBLIN, EnemyType.BOSS_MUSHROOM, EnemyType.BOSS_SKELETON -> 0  // Bosses don't shoot bullets
+            EnemyType.ZOMBIE -> 0  // Melee only, no shooting
+            EnemyType.ARCHER -> 1  // Shoots 1 bullet
+            EnemyType.SHOTGUNNER -> 3  // Shoots 3 bullets in spread
+            EnemyType.BOSS_BALLCHAIN -> 0  // Boss uses special 360° pattern
         }
 
         fun getGlowRadius(): Float {
@@ -394,12 +392,10 @@ class GameView(context: Context) : View(context) {
         }
 
         fun getDropChance(): Float = when(type) {
-            EnemyType.CIRCLE -> 0.10f      // 10% - common enemy
-            EnemyType.TRIANGLE -> 0.15f    // 15%
-            EnemyType.SQUARE -> 0.20f      // 20%
-            EnemyType.PENTAGON -> 0.25f    // 25%
-            EnemyType.HEXAGON -> 0.35f     // 35% - rare and tough
-            EnemyType.BOSS_FLYING_EYE, EnemyType.BOSS_GOBLIN, EnemyType.BOSS_MUSHROOM, EnemyType.BOSS_SKELETON -> 1.0f  // 100% - bosses always drop
+            EnemyType.ZOMBIE -> 0.10f      // 10% - melee fodder
+            EnemyType.ARCHER -> 0.20f      // 20% - ranged threat
+            EnemyType.SHOTGUNNER -> 0.30f  // 30% - dangerous spread shots
+            EnemyType.BOSS_BALLCHAIN -> 1.0f  // 100% - boss always drops
         }
     }
 
@@ -563,11 +559,11 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        // Load boss sprites
-        bossSprites[EnemyType.BOSS_FLYING_EYE] = BitmapFactory.decodeResource(resources, R.drawable.run_right)  // Ball and chain bot
-        bossSprites[EnemyType.BOSS_GOBLIN] = BitmapFactory.decodeResource(resources, R.drawable.boss_goblin)
-        bossSprites[EnemyType.BOSS_MUSHROOM] = BitmapFactory.decodeResource(resources, R.drawable.boss_mushroom)
-        bossSprites[EnemyType.BOSS_SKELETON] = BitmapFactory.decodeResource(resources, R.drawable.boss_skeleton)
+        // Load enemy type sprites
+        bossSprites[EnemyType.BOSS_BALLCHAIN] = BitmapFactory.decodeResource(resources, R.drawable.boss_ballchain)
+        bossSprites[EnemyType.ARCHER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_archer)
+        bossSprites[EnemyType.SHOTGUNNER] = BitmapFactory.decodeResource(resources, R.drawable.enemy_shotgunner)
+        // Zombies use the enemies001-027 sprites loaded above
     }
 
     fun pause() {
@@ -729,32 +725,18 @@ class GameView(context: Context) : View(context) {
             val isElite = wave >= 10 && rnd.nextFloat() < 0.2f
             val finalHp = if (isElite) hp * 2f else hp
 
-            // Progressive polygon introduction based on wave
+            // Progressive enemy type introduction based on wave
             val enemyType = when {
-                wave <= 2 -> EnemyType.CIRCLE
-                wave <= 4 -> if (rnd.nextFloat() < 0.7f) EnemyType.CIRCLE else EnemyType.TRIANGLE
-                wave <= 6 -> when (rnd.nextInt(3)) {
-                    0 -> EnemyType.CIRCLE
-                    1 -> EnemyType.TRIANGLE
-                    else -> EnemyType.SQUARE
-                }
-                wave <= 9 -> when (rnd.nextInt(4)) {
-                    0 -> EnemyType.CIRCLE
-                    1 -> EnemyType.TRIANGLE
-                    2 -> EnemyType.SQUARE
-                    else -> EnemyType.PENTAGON
-                }
-                else -> when (rnd.nextInt(5)) {
-                    0 -> EnemyType.CIRCLE
-                    1 -> EnemyType.TRIANGLE
-                    2 -> EnemyType.SQUARE
-                    3 -> EnemyType.PENTAGON
-                    else -> EnemyType.HEXAGON
+                wave <= 2 -> EnemyType.ZOMBIE  // Start with only zombies
+                wave <= 5 -> if (rnd.nextFloat() < 0.7f) EnemyType.ZOMBIE else EnemyType.ARCHER  // Introduce archers
+                else -> when (rnd.nextInt(10)) {
+                    0, 1, 2, 3, 4 -> EnemyType.ZOMBIE      // 50% zombies
+                    5, 6, 7 -> EnemyType.ARCHER            // 30% archers
+                    else -> EnemyType.SHOTGUNNER           // 20% shotgunners
                 }
             }
 
-            // 20% chance to spawn as zombie (melee-only) after wave 3
-            val isZombie = wave >= 3 && rnd.nextFloat() < 0.2f
+            val isZombie = enemyType == EnemyType.ZOMBIE
             val zombieScaleFactor = if (isZombie) 1.25f else 1f  // 25% larger
             val zombieRadius = 24f * zombieScaleFactor
 
@@ -770,13 +752,8 @@ class GameView(context: Context) : View(context) {
 
         // Spawn boss every 5 waves
         if (isBossWave) {
-            // Choose boss type based on wave number (cycle through bosses)
-            val bossType = when ((wave / 5) % 4) {
-                0 -> EnemyType.BOSS_FLYING_EYE
-                1 -> EnemyType.BOSS_GOBLIN
-                2 -> EnemyType.BOSS_MUSHROOM
-                else -> EnemyType.BOSS_SKELETON
-            }
+            // Ball and Chain Bot boss for all boss waves
+            val bossType = EnemyType.BOSS_BALLCHAIN
 
             // Spawn boss in center-ish area
             val bossX = playerX + (rnd.nextFloat() - 0.5f) * 200f
@@ -1633,8 +1610,6 @@ class GameView(context: Context) : View(context) {
             // Zombies don't shoot - skip them
             if (e.isZombie) continue
 
-            val cornerCount = e.getCornerCount()
-
             if (e.shootCooldown <= 0f) {
                 // Check bullet cap before allowing shooting
                 if (bullets.size >= MAX_BULLETS) {
@@ -1642,30 +1617,56 @@ class GameView(context: Context) : View(context) {
                     continue
                 }
 
-                if (cornerCount == 0) {
-                    // Circles fire one slow shot toward player after delay
-                    val dx = playerX - e.x
-                    val dy = playerY - e.y
-                    val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-                    if (dist > 0f) {
-                        val bulletSpeed = 150f // Slower than polygon bullets
-                        val vx = (dx / dist) * bulletSpeed
-                        val vy = (dy / dist) * bulletSpeed
-                        bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                when (e.type) {
+                    EnemyType.ARCHER -> {
+                        // Archer: Single aimed shot at player
+                        val dx = playerX - e.x
+                        val dy = playerY - e.y
+                        val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                        if (dist > 0f) {
+                            val bulletSpeed = 200f
+                            val vx = (dx / dist) * bulletSpeed
+                            val vy = (dy / dist) * bulletSpeed
+                            bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                        }
+                        e.shootCooldown = 3f + crowdPenalty
                     }
-                    e.shootCooldown = 4f + crowdPenalty // Longer when crowded
-                } else {
-                    // Polygon enemies shoot bullets equal to corner count
-                    val angleStep = (2f * PI.toFloat()) / cornerCount
-                    for (i in 0 until cornerCount) {
-                        if (bullets.size >= MAX_BULLETS) break
-                        val angle = angleStep * i
-                        val bulletSpeed = 200f // Slow dodgeable bullets
-                        val vx = cos(angle) * bulletSpeed
-                        val vy = sin(angle) * bulletSpeed
-                        bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                    EnemyType.SHOTGUNNER -> {
+                        // Shotgunner: 3 bullets in spread pattern toward player
+                        val dx = playerX - e.x
+                        val dy = playerY - e.y
+                        val baseAngle = atan2(dy.toDouble(), dx.toDouble()).toFloat()
+                        val spreadAngles = listOf(-0.3f, 0f, 0.3f)  // 3-bullet spread (radians)
+
+                        for (spreadAngle in spreadAngles) {
+                            if (bullets.size >= MAX_BULLETS) break
+                            val angle = baseAngle + spreadAngle
+                            val bulletSpeed = 220f
+                            val vx = cos(angle) * bulletSpeed
+                            val vy = sin(angle) * bulletSpeed
+                            bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                        }
+                        e.shootCooldown = 4f + crowdPenalty
                     }
-                    e.shootCooldown = 3f + crowdPenalty // Longer when crowded
+                    EnemyType.BOSS_BALLCHAIN -> {
+                        // Boss: 360° pattern, bullet count = wave number
+                        val bulletCount = wave  // Scales with wave
+                        val spiralOffset = if (wave > 10) e.shootCooldown * 2f else 0f  // Spiral after wave 10
+                        val angleStep = (2f * PI.toFloat()) / bulletCount
+
+                        for (i in 0 until bulletCount) {
+                            if (bullets.size >= MAX_BULLETS) break
+                            val angle = angleStep * i + spiralOffset
+                            val bulletSpeed = 150f  // Boss bullets are slower but numerous
+                            val vx = cos(angle) * bulletSpeed
+                            val vy = sin(angle) * bulletSpeed
+                            bullets.add(Bullet(e.x, e.y, vx, vy, false))
+                        }
+                        e.shootCooldown = 2f  // Boss fires frequently
+                    }
+                    else -> {
+                        // Zombie - shouldn't reach here but skip just in case
+                    }
                 }
             }
         }
@@ -2511,25 +2512,31 @@ class GameView(context: Context) : View(context) {
             val absY = abs(dy)
 
             // Get the sprite number sequence for this enemy type and direction
+            // All three zombie sprite rows now available for variety
+            val zombieRow = (e.hashCode() % 3)  // Assign based on enemy hash for variety
             val spriteSequence = when (e.type) {
-                EnemyType.CIRCLE -> when {
-                    absY > absX && dy > 0 -> intArrayOf(1, 4, 7)    // Down
-                    absY > absX && dy < 0 -> intArrayOf(3, 6, 9)    // Up
-                    absX >= absY && dx < 0 -> intArrayOf(2, 5, 8)   // Left
-                    else -> intArrayOf(2, 5, 8)                      // Right (flip left)
+                EnemyType.ZOMBIE -> when (zombieRow) {
+                    0 -> when {  // Blue-hooded row
+                        absY > absX && dy > 0 -> intArrayOf(1, 4, 7)
+                        absY > absX && dy < 0 -> intArrayOf(3, 6, 9)
+                        absX >= absY && dx < 0 -> intArrayOf(2, 5, 8)
+                        else -> intArrayOf(2, 5, 8)
+                    }
+                    1 -> when {  // Pink-haired row
+                        absY > absX && dy > 0 -> intArrayOf(10, 13, 16)
+                        absY > absX && dy < 0 -> intArrayOf(12, 15, 18)
+                        absX >= absY && dx < 0 -> intArrayOf(11, 14, 17)
+                        else -> intArrayOf(11, 14, 17)
+                    }
+                    else -> when {  // Brown-hooded row
+                        absY > absX && dy > 0 -> intArrayOf(19, 22, 25)
+                        absY > absX && dy < 0 -> intArrayOf(21, 24, 27)
+                        absX >= absY && dx < 0 -> intArrayOf(20, 23, 26)
+                        else -> intArrayOf(20, 23, 26)
+                    }
                 }
-                EnemyType.TRIANGLE -> when {
-                    absY > absX && dy > 0 -> intArrayOf(10, 13, 16)  // Down
-                    absY > absX && dy < 0 -> intArrayOf(12, 15, 18)  // Up
-                    absX >= absY && dx < 0 -> intArrayOf(11, 14, 17) // Left
-                    else -> intArrayOf(11, 14, 17)                    // Right (flip left)
-                }
-                else -> when {  // SQUARE, PENTAGON, HEXAGON
-                    absY > absX && dy > 0 -> intArrayOf(19, 22, 25)  // Down
-                    absY > absX && dy < 0 -> intArrayOf(21, 24, 27)  // Up
-                    absX >= absY && dx < 0 -> intArrayOf(20, 23, 26) // Left
-                    else -> intArrayOf(20, 23, 26)                    // Right (flip left)
-                }
+                EnemyType.ARCHER, EnemyType.SHOTGUNNER -> intArrayOf(1)  // Use single sprite (non-animated)
+                else -> intArrayOf(1)  // Fallback
             }
 
             // Determine if we need to flip horizontally (moving right)
@@ -2539,8 +2546,12 @@ class GameView(context: Context) : View(context) {
             val animIndex = e.animFrame % 3
             val spriteNumber = spriteSequence[animIndex]
 
-            // Get the sprite bitmap
-            val spriteBitmap = enemySprites[spriteNumber]
+            // Get the sprite bitmap (archer/shotgunner use bossSprites map, zombies use enemySprites)
+            val spriteBitmap = when (e.type) {
+                EnemyType.ARCHER, EnemyType.SHOTGUNNER -> bossSprites[e.type]
+                EnemyType.ZOMBIE -> enemySprites[spriteNumber]
+                else -> null
+            }
             if (spriteBitmap != null) {
                 // Draw sprite (zombies are 25% larger)
                 val enemySize = if (e.isZombie) 75f else 60f
