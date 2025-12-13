@@ -585,23 +585,27 @@ class GameView(context: Context) : View(context) {
             CrashLogger.log("ERROR: Failed to load BOSS_BALLCHAIN sprite: ${e.message}")
         }
 
-        // Load archer sprite sheets from assets and split into frames
+        // Load archer individual frame files from drawable resources
         try {
-            // Idle: 6 frames @ 7 FPS
-            val archerIdleSheet = context.assets.open("enemies/archer/idle.png").use {
-                BitmapFactory.decodeStream(it)
+            // Idle: 5 frames @ 7 FPS
+            for (i in 0..4) {
+                val resourceId = resources.getIdentifier("archer_idle_$i", "drawable", context.packageName)
+                if (resourceId != 0) {
+                    archerIdleFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+                }
             }
-            splitVerticalSpriteSheet(archerIdleSheet, 6, archerIdleFrames)
             CrashLogger.log("Loaded ARCHER idle frames: ${archerIdleFrames.size}")
 
             // Run: 8 frames @ 11 FPS
-            val archerRunSheet = context.assets.open("enemies/archer/run.png").use {
-                BitmapFactory.decodeStream(it)
+            for (i in 0..7) {
+                val resourceId = resources.getIdentifier("archer_run_$i", "drawable", context.packageName)
+                if (resourceId != 0) {
+                    archerRunFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+                }
             }
-            splitVerticalSpriteSheet(archerRunSheet, 8, archerRunFrames)
             CrashLogger.log("Loaded ARCHER run frames: ${archerRunFrames.size}")
         } catch (e: Exception) {
-            CrashLogger.log("ERROR: Failed to load ARCHER sprite sheets: ${e.message}")
+            CrashLogger.log("ERROR: Failed to load ARCHER sprite frames: ${e.message}")
             e.printStackTrace()
         }
 
@@ -1297,9 +1301,9 @@ class GameView(context: Context) : View(context) {
                 // Update animation based on enemy type and movement state
                 when (e.type) {
                     EnemyType.ARCHER, EnemyType.SHOTGUNNER -> {
-                        // Archer/Shotgunner: idle = 6 frames @ 7 FPS, run = 8 frames @ 11 FPS
+                        // Archer/Shotgunner: idle = 5 frames @ 7 FPS, run = 8 frames @ 11 FPS
                         val fps = if (e.isRunning) 11f else 7f
-                        val frameCount = if (e.isRunning) 8 else 6
+                        val frameCount = if (e.isRunning) 8 else 5
                         val frameDuration = 1f / fps
 
                         e.animTime += dt
