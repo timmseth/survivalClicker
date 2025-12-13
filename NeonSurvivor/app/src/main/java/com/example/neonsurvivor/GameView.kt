@@ -1737,10 +1737,11 @@ class GameView(context: Context) : View(context) {
                         // Zombie - shouldn't reach here but skip just in case
                     }
                 }
+                }
             }
-        } catch (e: Exception) {
-            CrashLogger.log("ERROR in handleEnemyShooting: ${e.message}")
-            e.printStackTrace()
+        } catch (ex: Exception) {
+            CrashLogger.log("ERROR in handleEnemyShooting: ${ex.message}")
+            ex.printStackTrace()
         }
     }
 
