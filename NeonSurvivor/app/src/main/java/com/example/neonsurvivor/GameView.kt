@@ -728,10 +728,10 @@ class GameView(context: Context) : View(context) {
 
             // Progressive enemy type introduction based on wave
             val enemyType = when {
-                wave <= 2 -> EnemyType.ZOMBIE  // Start with only zombies
-                wave <= 5 -> if (rnd.nextFloat() < 0.7f) EnemyType.ZOMBIE else EnemyType.ARCHER  // Introduce archers
+                wave <= 3 -> EnemyType.ZOMBIE  // Waves 1-3: Only zombies
+                wave <= 6 -> if (rnd.nextFloat() < 0.7f) EnemyType.ZOMBIE else EnemyType.ARCHER  // Waves 4-6: Introduce archers
                 else -> when (rnd.nextInt(10)) {
-                    0, 1, 2, 3, 4 -> EnemyType.ZOMBIE      // 50% zombies
+                    0, 1, 2, 3, 4 -> EnemyType.ZOMBIE      // Wave 7+: 50% zombies
                     5, 6, 7 -> EnemyType.ARCHER            // 30% archers
                     else -> EnemyType.SHOTGUNNER           // 20% shotgunners
                 }
