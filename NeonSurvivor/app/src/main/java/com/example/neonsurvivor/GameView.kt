@@ -189,7 +189,8 @@ class GameView(context: Context) : View(context) {
         isAntiAlias = true
     }
     private val greenOrbGlowPaint = Paint().apply {
-        color = Color.GREEN
+        color = Color.argb(120, 0, 255, 0)  // Semi-transparent green
+        style = Paint.Style.FILL
         isAntiAlias = true
         maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
     }
@@ -1925,7 +1926,7 @@ class GameView(context: Context) : View(context) {
             UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Orbiting Drone",
                 when {
                     quantumMirrorMaxPaddles == 0 -> "Fires every 3s"
-                    quantumMirrorCooldown > 3f -> "Fire rate: ${quantumMirrorCooldown}s → ${quantumMirrorCooldown - 1f}s"
+                    quantumMirrorCooldown > 1f -> "Fire rate: ${quantumMirrorCooldown}s → ${quantumMirrorCooldown - 1f}s"
                     else -> "Add drone: $quantumMirrorMaxPaddles → ${quantumMirrorMaxPaddles + 1}"
                 }, weight = 80),
             UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", if (hasFragmentDrive) "Already active" else "Kills spawn 4 micro-projectiles", weight = 100),
