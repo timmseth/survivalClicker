@@ -2724,8 +2724,8 @@ class GameView(context: Context) : View(context) {
                 else -> intArrayOf(1)  // Fallback
             }
 
-            // Determine if we need to flip horizontally (moving right)
-            val flipHorizontal = absX >= absY && dx > 0
+            // Determine if we need to flip horizontally (sprites face right by default, flip when moving left)
+            val flipHorizontal = absX >= absY && dx < 0
 
             // Get current animation frame (cycle through available frames)
             val animIndex = if (spriteSequence.size > 1) e.animFrame % spriteSequence.size else 0
@@ -2762,10 +2762,10 @@ class GameView(context: Context) : View(context) {
                 val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
                 val targetWidth = targetHeight * aspectRatio
 
-                // Position offsets to fix sprite centering (down and left from current position)
+                // Position offsets to fix sprite centering
                 val offsetX = when (e.type) {
-                    EnemyType.SHOTGUNNER -> -40f  // Move left (was too far right)
-                    EnemyType.ARCHER -> -10f  // Slightly left
+                    EnemyType.SHOTGUNNER -> -45f  // Move left (still slightly too far right)
+                    EnemyType.ARCHER -> 5f  // Move right (was too far left)
                     else -> 0f
                 }
                 val offsetY = when (e.type) {
