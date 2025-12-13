@@ -703,7 +703,7 @@ class GameView(context: Context) : View(context) {
             // Breather wave: 60% normal count but guaranteed loot
             (baseCount * 0.6f).toInt()
         } else {
-            min(baseCount.toInt(), MAX_ENEMIES)
+            kotlin.math.min(baseCount.toInt(), MAX_ENEMIES)
         }
 
         for (i in 0 until count) {
@@ -722,7 +722,7 @@ class GameView(context: Context) : View(context) {
             val hp = 20f + sqrt(wave.toFloat()) * 15f  // Reduced from 30 + 20
 
             // Speed caps at 350f, starts slower
-            val baseSpeed = min(80f + wave * 8f, 350f)  // Starts at 80 instead of 100
+            val baseSpeed = kotlin.math.min(80f + wave * 8f, 350f)  // Starts at 80 instead of 100
 
             // Elite enemies after wave 10: 20% chance for 2x HP, guaranteed drop
             val isElite = wave >= 10 && rnd.nextFloat() < 0.2f
@@ -887,7 +887,7 @@ class GameView(context: Context) : View(context) {
         // Update death animation and transition to death screen
         if (isDying) {
             deathAnimationTime += dt
-            deathScreenFadeAlpha = min(deathScreenFadeAlpha + dt * 200f, 255f)
+            deathScreenFadeAlpha = kotlin.math.min(deathScreenFadeAlpha + dt * 200f, 255f)
 
             if (deathAnimationTime >= 1.5f) { // Death animation + delay
                 isDying = false
@@ -923,7 +923,7 @@ class GameView(context: Context) : View(context) {
             }
 
             // Update barrier shield recovery (max 7 layers, but AOE keeps scaling)
-            val maxLayers = min(clickerBarrierLevel, 7)
+            val maxLayers = kotlin.math.min(clickerBarrierLevel, 7)
             if (barrierShieldLayers < maxLayers) {
                 barrierRecoveryTimer += dt
                 if (barrierRecoveryTimer >= barrierRecoveryDelay) {
@@ -1423,7 +1423,7 @@ class GameView(context: Context) : View(context) {
 
                         // Vampire effect - heal on kill
                         if (vampireStacks > 0) {
-                            playerHp = min(playerHp + vampireStacks, maxHp)
+                            playerHp = kotlin.math.min(playerHp + vampireStacks, maxHp)
                         }
 
                         // Shockwave effect - damage nearby enemies
@@ -1845,7 +1845,7 @@ class GameView(context: Context) : View(context) {
         }
 
         val rnd = Random(System.nanoTime())
-        val particleCount = min(12, MAX_BLOOD_PARTICLES - blood.size)
+        val particleCount = kotlin.math.min(12, MAX_BLOOD_PARTICLES - blood.size)
         for (i in 0 until particleCount) {
             val angle = rnd.nextFloat() * (2f * Math.PI.toFloat())
             val speed = 80f + rnd.nextFloat() * 120f
@@ -2164,7 +2164,7 @@ class GameView(context: Context) : View(context) {
                         orbCurrency -= cost
                         clickerBarrierLevel++
                         // Add a new barrier layer immediately when purchased (capped at 7)
-                        barrierShieldLayers = min(clickerBarrierLevel, 7)
+                        barrierShieldLayers = kotlin.math.min(clickerBarrierLevel, 7)
                         return true
                     }
                 }
