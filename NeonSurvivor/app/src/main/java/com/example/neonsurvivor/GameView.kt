@@ -1350,7 +1350,7 @@ class GameView(context: Context) : View(context) {
                     // Life Steal - heal based on damage dealt
                     if (lifeStealPercent > 0f) {
                         val healAmount = finalDamage * lifeStealPercent
-                        playerHp = min(playerHp + healAmount, maxHp)
+                        playerHp = kotlin.math.min(playerHp + healAmount, maxHp)
                     }
 
                     // Chain Lightning - arc to 2 nearby enemies
