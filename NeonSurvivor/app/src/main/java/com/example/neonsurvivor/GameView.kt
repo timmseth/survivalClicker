@@ -376,7 +376,8 @@ class GameView(context: Context) : View(context) {
         var shootCooldown: Float = 0f,
         var animFrame: Int = 0,
         var animTime: Float = 0f,
-        val isBoss: Boolean = false
+        val isBoss: Boolean = false,
+        val isZombie: Boolean = false  // Melee-only enemy, no shooting, 2x contact damage
     ) {
         fun getCornerCount(): Int = when(type) {
             EnemyType.CIRCLE -> 0
@@ -736,7 +737,12 @@ class GameView(context: Context) : View(context) {
                 }
             }
 
-            val enemy = Enemy(ex, ey, 24f, baseSpeed, finalHp, finalHp, enemyType)
+            // 20% chance to spawn as zombie (melee-only) after wave 3
+            val isZombie = wave >= 3 && rnd.nextFloat() < 0.2f
+            val zombieScaleFactor = if (isZombie) 1.25f else 1f  // 25% larger
+            val zombieRadius = 24f * zombieScaleFactor
+
+            val enemy = Enemy(ex, ey, zombieRadius, baseSpeed, finalHp, finalHp, enemyType, isZombie = isZombie)
 
             // Tag elite enemies for guaranteed drops (store in a set)
             if (isElite || isBreatherWave) {
@@ -1167,10 +1173,11 @@ class GameView(context: Context) : View(context) {
                         triggerDamageFeedback()
                         damageCooldown = 0.5f
                     } else {
-                        // No shield - take HP damage
-                        playerHp -= 25
+                        // No shield - take HP damage (zombies deal 2x damage)
+                        val contactDamage = if (e.isZombie) 50 else 25
+                        playerHp -= contactDamage
                         if (playerHp < 0) playerHp = 0
-                        CrashLogger.log("Player hit by enemy collision! HP: $playerHp, Enemy type: ${e.type}")
+                        CrashLogger.log("Player hit by ${if (e.isZombie) "ZOMBIE" else "enemy"} collision! HP: $playerHp, Damage: $contactDamage, Enemy type: ${e.type}")
                         tookDamage = true
                         damageCooldown = 0.5f
                         barrierRecoveryTimer = 0f  // Reset recovery timer when taking HP damage
@@ -1510,6 +1517,9 @@ class GameView(context: Context) : View(context) {
         val crowdPenalty = (enemies.size / 25f).coerceIn(0f, 3f)
 
         for (e in enemies) {
+            // Zombies don't shoot - skip them
+            if (e.isZombie) continue
+
             val cornerCount = e.getCornerCount()
 
             if (e.shootCooldown <= 0f) {
@@ -2375,12 +2385,23 @@ class GameView(context: Context) : View(context) {
             // Get the sprite bitmap
             val spriteBitmap = enemySprites[spriteNumber]
             if (spriteBitmap != null) {
-                // Draw sprite (make it big enough to see clearly)
-                val enemySize = 60f
+                // Draw sprite (zombies are 25% larger)
+                val enemySize = if (e.isZombie) 75f else 60f
 
-                // Draw glow BEHIND sprite
+                // Draw glow BEHIND sprite (green for zombies)
                 val glowRadius = e.getGlowRadius()
-                canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, enemyGlowPaint)
+                if (e.isZombie) {
+                    // Zombies have green glow
+                    val zombieGlowPaint = Paint().apply {
+                        color = Color.GREEN
+                        style = Paint.Style.FILL
+                        maskFilter = android.graphics.BlurMaskFilter(15f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+                        alpha = 180
+                    }
+                    canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, zombieGlowPaint)
+                } else {
+                    canvas.drawCircle(e.x, e.y, enemySize / 3f + glowRadius, enemyGlowPaint)
+                }
 
                 // Flip horizontally if moving right
                 if (flipHorizontal) {
@@ -2394,7 +2415,19 @@ class GameView(context: Context) : View(context) {
                     e.x + enemySize / 2f,
                     e.y + enemySize / 2f
                 )
-                canvas.drawBitmap(spriteBitmap, null, dstRect, spritePaint)
+
+                // Draw sprite with green tint for zombies
+                if (e.isZombie) {
+                    val zombieTintPaint = Paint().apply {
+                        colorFilter = android.graphics.PorterDuffColorFilter(
+                            Color.argb(120, 0, 255, 0),  // Semi-transparent green overlay
+                            android.graphics.PorterDuff.Mode.SRC_ATOP
+                        )
+                    }
+                    canvas.drawBitmap(spriteBitmap, null, dstRect, zombieTintPaint)
+                } else {
+                    canvas.drawBitmap(spriteBitmap, null, dstRect, spritePaint)
+                }
 
                 if (flipHorizontal) {
                     canvas.restore()
