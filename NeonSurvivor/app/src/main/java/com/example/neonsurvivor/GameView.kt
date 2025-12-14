@@ -2724,8 +2724,8 @@ class GameView(context: Context) : View(context) {
                 else -> intArrayOf(1)  // Fallback
             }
 
-            // Determine if we need to flip horizontally (sprites face right by default, flip when moving left)
-            val flipHorizontal = absX >= absY && dx < 0
+            // Determine if we need to flip horizontally (zombies face left by default for left-facing sprites)
+            val flipHorizontal = absX >= absY && dx > 0
 
             // Get current animation frame (cycle through available frames)
             val animIndex = if (spriteSequence.size > 1) e.animFrame % spriteSequence.size else 0
@@ -2753,8 +2753,8 @@ class GameView(context: Context) : View(context) {
             if (spriteBitmap != null) {
                 // Draw sprite - different sizes per enemy type (target height)
                 val targetHeight = when (e.type) {
-                    EnemyType.ARCHER -> 200f  // Archer sprites are smaller pixels, need more scaling
-                    EnemyType.SHOTGUNNER -> 120f  // Shotgunner normal size
+                    EnemyType.ARCHER -> 400f  // Archer sprites need 2x scaling to match shotgunner size
+                    EnemyType.SHOTGUNNER -> 120f  // Shotgunner correct size
                     EnemyType.ZOMBIE -> 75f  // 25% larger than base
                     else -> 60f  // Base size
                 }
@@ -2763,15 +2763,15 @@ class GameView(context: Context) : View(context) {
                 val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
                 val targetWidth = targetHeight * aspectRatio
 
-                // Position offsets to fix sprite centering (reversed direction)
+                // Position offsets - horizontal only, leaving vertical for later tuning
                 val offsetX = when (e.type) {
-                    EnemyType.SHOTGUNNER -> 45f  // Move right (opposite direction)
-                    EnemyType.ARCHER -> -5f  // Move left (opposite direction)
+                    EnemyType.SHOTGUNNER -> 120f  // Move far right to align with circle
+                    EnemyType.ARCHER -> 25f  // Move right to center on circle
                     else -> 0f
                 }
                 val offsetY = when (e.type) {
-                    EnemyType.SHOTGUNNER -> -40f  // Move up (opposite direction)
-                    EnemyType.ARCHER -> -10f  // Move up (opposite direction)
+                    EnemyType.SHOTGUNNER -> -40f  // Keep current vertical
+                    EnemyType.ARCHER -> -10f  // Keep current vertical
                     else -> 0f
                 }
 
