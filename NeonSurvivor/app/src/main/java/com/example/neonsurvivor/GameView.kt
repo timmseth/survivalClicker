@@ -2753,7 +2753,8 @@ class GameView(context: Context) : View(context) {
             if (spriteBitmap != null) {
                 // Draw sprite - different sizes per enemy type (target height)
                 val targetHeight = when (e.type) {
-                    EnemyType.ARCHER, EnemyType.SHOTGUNNER -> 120f  // Adjusted size for ranged enemies
+                    EnemyType.ARCHER -> 200f  // Archer sprites are smaller pixels, need more scaling
+                    EnemyType.SHOTGUNNER -> 120f  // Shotgunner normal size
                     EnemyType.ZOMBIE -> 75f  // 25% larger than base
                     else -> 60f  // Base size
                 }
@@ -2762,15 +2763,15 @@ class GameView(context: Context) : View(context) {
                 val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
                 val targetWidth = targetHeight * aspectRatio
 
-                // Position offsets to fix sprite centering
+                // Position offsets to fix sprite centering (reversed direction)
                 val offsetX = when (e.type) {
-                    EnemyType.SHOTGUNNER -> -45f  // Move left (still slightly too far right)
-                    EnemyType.ARCHER -> 5f  // Move right (was too far left)
+                    EnemyType.SHOTGUNNER -> 45f  // Move right (opposite direction)
+                    EnemyType.ARCHER -> -5f  // Move left (opposite direction)
                     else -> 0f
                 }
                 val offsetY = when (e.type) {
-                    EnemyType.SHOTGUNNER -> 40f  // Move down (was too far up)
-                    EnemyType.ARCHER -> 10f  // Slightly down
+                    EnemyType.SHOTGUNNER -> -40f  // Move up (opposite direction)
+                    EnemyType.ARCHER -> -10f  // Move up (opposite direction)
                     else -> 0f
                 }
 
