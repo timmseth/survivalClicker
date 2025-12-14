@@ -206,6 +206,12 @@ class GameView(context: Context) : View(context) {
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         isAntiAlias = true
     }
+    private val zombieTintPaint = Paint().apply {
+        colorFilter = android.graphics.PorterDuffColorFilter(
+            Color.argb(120, 0, 255, 0),  // Semi-transparent green overlay
+            android.graphics.PorterDuff.Mode.SRC_ATOP
+        )
+    }
 
     // Barrier shield paints (reused, only color changes)
     private val barrierPaint = Paint().apply {
@@ -2763,15 +2769,15 @@ class GameView(context: Context) : View(context) {
                 val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
                 val targetWidth = targetHeight * aspectRatio
 
-                // Position offsets - horizontal only, leaving vertical for later tuning
+                // Position offsets to align sprites with hitbox circles
                 val offsetX = when (e.type) {
-                    EnemyType.SHOTGUNNER -> 120f  // Move far right to align with circle
-                    EnemyType.ARCHER -> 25f  // Move right to center on circle
+                    EnemyType.SHOTGUNNER -> 110f  // Move slightly left from 120f
+                    EnemyType.ARCHER -> 30f  // Move slightly more right from 25f
                     else -> 0f
                 }
                 val offsetY = when (e.type) {
-                    EnemyType.SHOTGUNNER -> -40f  // Keep current vertical
-                    EnemyType.ARCHER -> -10f  // Keep current vertical
+                    EnemyType.SHOTGUNNER -> 40f  // Move down (was -40f too high)
+                    EnemyType.ARCHER -> -5f  // Move slightly down from -10f
                     else -> 0f
                 }
 
@@ -2804,14 +2810,8 @@ class GameView(context: Context) : View(context) {
                     e.y + offsetY
                 )
 
-                // Draw sprite with green tint for zombies
+                // Draw sprite with green tint for zombies (using class-level paint to avoid flickering)
                 if (e.isZombie) {
-                    val zombieTintPaint = Paint().apply {
-                        colorFilter = android.graphics.PorterDuffColorFilter(
-                            Color.argb(120, 0, 255, 0),  // Semi-transparent green overlay
-                            android.graphics.PorterDuff.Mode.SRC_ATOP
-                        )
-                    }
                     canvas.drawBitmap(spriteBitmap, null, dstRect, zombieTintPaint)
                 } else {
                     canvas.drawBitmap(spriteBitmap, null, dstRect, spritePaint)
