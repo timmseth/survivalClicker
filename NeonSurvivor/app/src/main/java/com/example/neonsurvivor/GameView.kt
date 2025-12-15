@@ -97,6 +97,7 @@ class GameView(context: Context) : View(context) {
         style = Paint.Style.FILL
         isAntiAlias = true
         maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL) // Sharper glow
+        alpha = 38  // 15% opacity for subtle debug circles
     }
     private val bulletPaint = Paint().apply {
         color = Color.CYAN
@@ -2771,13 +2772,13 @@ class GameView(context: Context) : View(context) {
 
                 // Position offsets to align sprites with hitbox circles
                 val offsetX = when (e.type) {
-                    EnemyType.SHOTGUNNER -> 110f  // Move slightly left from 120f
-                    EnemyType.ARCHER -> 30f  // Move slightly more right from 25f
+                    EnemyType.SHOTGUNNER -> 100f  // Move left from 110f
+                    EnemyType.ARCHER -> 20f  // Move left from 30f
                     else -> 0f
                 }
                 val offsetY = when (e.type) {
                     EnemyType.SHOTGUNNER -> 40f  // Move down (was -40f too high)
-                    EnemyType.ARCHER -> -5f  // Move slightly down from -10f
+                    EnemyType.ARCHER -> 0f  // Move down from -5f
                     else -> 0f
                 }
 
@@ -2791,9 +2792,10 @@ class GameView(context: Context) : View(context) {
                         maskFilter = android.graphics.BlurMaskFilter(15f, android.graphics.BlurMaskFilter.Blur.NORMAL)
                         alpha = 180
                     }
-                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, zombieGlowPaint)
+                    canvas.drawCircle(e.x, e.y, e.radius + glowRadius, zombieGlowPaint)
                 } else {
-                    canvas.drawCircle(e.x, e.y, targetHeight / 3f + glowRadius, enemyGlowPaint)
+                    // Use actual hitbox radius for glow, not sprite size
+                    canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
                 }
 
                 // Flip horizontally if moving right (around sprite center, not hitbox)
