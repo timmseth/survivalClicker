@@ -17,7 +17,9 @@
       "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/shotgunner_idle_$i.png\")",
       "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/shotgunner_run_$i.png\")",
       "Bash(gh run view:*)",
-      "Bash(gh run watch:*)"
+      "Bash(gh run watch:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 20294290129)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 20294290129 --log-failed)"
     ],
     "deny": [],
     "ask": []
