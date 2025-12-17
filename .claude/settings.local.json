@@ -16,7 +16,8 @@
       "Bash(for i in {0..5})",
       "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/shotgunner_idle_$i.png\")",
       "Bash(do cp \"tile00$i.png\" \"../../../../NeonSurvivor/app/src/main/res/drawable/shotgunner_run_$i.png\")",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(gh run watch:*)"
     ],
     "deny": [],
     "ask": []

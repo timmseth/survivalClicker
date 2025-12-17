@@ -379,10 +379,10 @@ class GameView(context: Context) : View(context) {
 
     // Sprite offset values (adjustable in sprite debug menu)
     private var zombieOffsetX = 0f
-    private var zombieOffsetY = 0f
-    private var archerOffsetX = 20f
-    private var archerOffsetY = 0f
-    private var shotgunnerOffsetX = 100f
+    private var zombieOffsetY = 35f
+    private var archerOffsetX = 60f
+    private var archerOffsetY = 45f
+    private var shotgunnerOffsetX = 90f
     private var shotgunnerOffsetY = 40f
 
     // Kill tracking
@@ -752,10 +752,10 @@ class GameView(context: Context) : View(context) {
 
             // Load sprite offset values
             zombieOffsetX = debugPrefs.getFloat("zombie_offset_x", 0f)
-            zombieOffsetY = debugPrefs.getFloat("zombie_offset_y", 0f)
-            archerOffsetX = debugPrefs.getFloat("archer_offset_x", 20f)
-            archerOffsetY = debugPrefs.getFloat("archer_offset_y", 0f)
-            shotgunnerOffsetX = debugPrefs.getFloat("shotgunner_offset_x", 100f)
+            zombieOffsetY = debugPrefs.getFloat("zombie_offset_y", 35f)
+            archerOffsetX = debugPrefs.getFloat("archer_offset_x", 60f)
+            archerOffsetY = debugPrefs.getFloat("archer_offset_y", 45f)
+            shotgunnerOffsetX = debugPrefs.getFloat("shotgunner_offset_x", 90f)
             shotgunnerOffsetY = debugPrefs.getFloat("shotgunner_offset_y", 40f)
 
             CrashLogger.log("GameView initialized. Starting wave 1. God mode: $godMode, Guns: $gunCount")
@@ -2385,10 +2385,10 @@ class GameView(context: Context) : View(context) {
                 // Reset button
                 if (resetOffsetsButtonRect.contains(x, y)) {
                     zombieOffsetX = 0f
-                    zombieOffsetY = 0f
-                    archerOffsetX = 20f
-                    archerOffsetY = 0f
-                    shotgunnerOffsetX = 100f
+                    zombieOffsetY = 35f
+                    archerOffsetX = 60f
+                    archerOffsetY = 45f
+                    shotgunnerOffsetX = 90f
                     shotgunnerOffsetY = 40f
                     debugPrefs.edit()
                         .putFloat("zombie_offset_x", zombieOffsetX)
@@ -2973,10 +2973,10 @@ class GameView(context: Context) : View(context) {
                     canvas.drawCircle(e.x, e.y, e.radius + glowRadius, enemyGlowPaint)
                 }
 
-                // Flip horizontally if moving right (around sprite center, not hitbox)
+                // Flip horizontally if moving right (around hitbox center for symmetry)
                 if (flipHorizontal) {
                     canvas.save()
-                    canvas.scale(-1f, 1f, e.x + offsetX, e.y + offsetY)
+                    canvas.scale(-1f, 1f, e.x, e.y)
                 }
 
                 // Anchor at bottom-center for proper grounding (pivot point)
