@@ -47,10 +47,11 @@ class GameView(context: Context) : View(context) {
     private var cameraY = 0f
 
     // Flyout menu system
-    private var currentMenu: String? = null  // null, "SETTINGS", or "UPGRADES"
+    private var currentMenu: String? = null  // null, "SETTINGS", "UPGRADES", or "SPRITE_DEBUG"
     private var menuSlideProgress = 0f  // 0 = closed, 1 = open
     private var settingsTabRect = RectF()
     private var upgradesTabRect = RectF()
+    private var spriteDebugTabRect = RectF()
     private var unpauseCountdown = 0  // 3, 2, 1, 0 (0 = not counting)
     private var unpauseCountdownAlpha = 0f
 
@@ -67,6 +68,21 @@ class GameView(context: Context) : View(context) {
     private var loadButtonRect = RectF()
     private var draggingMusicSlider = false
     private var draggingRainSlider = false
+
+    // Sprite Debug Menu UI elements
+    private var zombieXSliderRect = RectF()
+    private var zombieYSliderRect = RectF()
+    private var archerXSliderRect = RectF()
+    private var archerYSliderRect = RectF()
+    private var shotgunnerXSliderRect = RectF()
+    private var shotgunnerYSliderRect = RectF()
+    private var resetOffsetsButtonRect = RectF()
+    private var draggingZombieXSlider = false
+    private var draggingZombieYSlider = false
+    private var draggingArcherXSlider = false
+    private var draggingArcherYSlider = false
+    private var draggingShotgunnerXSlider = false
+    private var draggingShotgunnerYSlider = false
 
     // Screen shake & damage feedback
     private var screenShakeX = 0f
@@ -360,6 +376,14 @@ class GameView(context: Context) : View(context) {
 
     // Debug settings
     private var godMode = false
+
+    // Sprite offset values (adjustable in sprite debug menu)
+    private var zombieOffsetX = 0f
+    private var zombieOffsetY = 0f
+    private var archerOffsetX = 20f
+    private var archerOffsetY = 0f
+    private var shotgunnerOffsetX = 100f
+    private var shotgunnerOffsetY = 40f
 
     // Kill tracking
     private var killCount = 0
@@ -714,9 +738,25 @@ class GameView(context: Context) : View(context) {
                 h / 2f + tabSize + tabGap / 2f
             )
 
+            // Sprite Debug tab (below upgrades)
+            spriteDebugTabRect = RectF(
+                w - tabSize,
+                h / 2f + tabSize + tabGap * 1.5f,
+                w.toFloat(),
+                h / 2f + tabSize * 2 + tabGap * 1.5f
+            )
+
             // Load debug settings
             godMode = debugPrefs.getBoolean("god_mode", false)
             gunCount = debugPrefs.getInt("gun_count", 1).coerceIn(1, 10)
+
+            // Load sprite offset values
+            zombieOffsetX = debugPrefs.getFloat("zombie_offset_x", 0f)
+            zombieOffsetY = debugPrefs.getFloat("zombie_offset_y", 0f)
+            archerOffsetX = debugPrefs.getFloat("archer_offset_x", 20f)
+            archerOffsetY = debugPrefs.getFloat("archer_offset_y", 0f)
+            shotgunnerOffsetX = debugPrefs.getFloat("shotgunner_offset_x", 100f)
+            shotgunnerOffsetY = debugPrefs.getFloat("shotgunner_offset_y", 40f)
 
             CrashLogger.log("GameView initialized. Starting wave 1. God mode: $godMode, Guns: $gunCount")
             spawnWave()
@@ -2327,6 +2367,41 @@ class GameView(context: Context) : View(context) {
             val x = event.getX(index)
             val y = event.getY(index)
 
+            // **HIGHEST PRIORITY** Check Sprite Debug tab (always visible)
+            if (!inGacha && !isDying && !inDeathScreen && spriteDebugTabRect.contains(x, y)) {
+                if (currentMenu == "SPRITE_DEBUG") {
+                    // Close menu and start countdown
+                    currentMenu = null
+                    unpauseCountdown = 3
+                    unpauseCountdownAlpha = 1f
+                } else {
+                    currentMenu = "SPRITE_DEBUG"
+                }
+                return true
+            }
+
+            // Check Sprite Debug Menu controls (sliders and reset button)
+            if (currentMenu == "SPRITE_DEBUG" && !inGacha && !isDying && !inDeathScreen) {
+                // Reset button
+                if (resetOffsetsButtonRect.contains(x, y)) {
+                    zombieOffsetX = 0f
+                    zombieOffsetY = 0f
+                    archerOffsetX = 20f
+                    archerOffsetY = 0f
+                    shotgunnerOffsetX = 100f
+                    shotgunnerOffsetY = 40f
+                    debugPrefs.edit()
+                        .putFloat("zombie_offset_x", zombieOffsetX)
+                        .putFloat("zombie_offset_y", zombieOffsetY)
+                        .putFloat("archer_offset_x", archerOffsetX)
+                        .putFloat("archer_offset_y", archerOffsetY)
+                        .putFloat("shotgunner_offset_x", shotgunnerOffsetX)
+                        .putFloat("shotgunner_offset_y", shotgunnerOffsetY)
+                        .apply()
+                    return true
+                }
+            }
+
             // Check Settings tab (always visible)
             if (!inGacha && !isDying && !inDeathScreen && settingsTabRect.contains(x, y)) {
                 if (currentMenu == "SETTINGS") {
@@ -2474,6 +2549,7 @@ class GameView(context: Context) : View(context) {
                 val touchingUI = !inGacha && !isDying && !inDeathScreen && (
                     settingsTabRect.contains(x, y) ||
                     upgradesTabRect.contains(x, y) ||
+                    spriteDebugTabRect.contains(x, y) ||
                     (currentMenu == "UPGRADES" && (
                         damageButtonRect.contains(x, y) ||
                         fireButtonRect.contains(x, y) ||
@@ -2489,6 +2565,15 @@ class GameView(context: Context) : View(context) {
                         rainVolumeSliderRect.contains(x, y) ||
                         saveButtonRect.contains(x, y) ||
                         loadButtonRect.contains(x, y)
+                    )) ||
+                    (currentMenu == "SPRITE_DEBUG" && (
+                        zombieXSliderRect.contains(x, y) ||
+                        zombieYSliderRect.contains(x, y) ||
+                        archerXSliderRect.contains(x, y) ||
+                        archerYSliderRect.contains(x, y) ||
+                        shotgunnerXSliderRect.contains(x, y) ||
+                        shotgunnerYSliderRect.contains(x, y) ||
+                        resetOffsetsButtonRect.contains(x, y)
                     ))
                 )
 
@@ -2506,6 +2591,52 @@ class GameView(context: Context) : View(context) {
                         val ratio = ((x - rainVolumeSliderRect.left) / rainVolumeSliderRect.width()).coerceIn(0f, 1f)
                         settingsPrefs.edit().putFloat("rain_volume", ratio).apply()
                         AudioManager.rainVolume = ratio
+                        return true
+                    }
+                }
+
+                // Handle sprite debug slider dragging start (PRIORITY over other sliders)
+                if (currentMenu == "SPRITE_DEBUG") {
+                    if (zombieXSliderRect.contains(x, y)) {
+                        draggingZombieXSlider = true
+                        val ratio = ((x - zombieXSliderRect.left) / zombieXSliderRect.width()).coerceIn(0f, 1f)
+                        zombieOffsetX = -200f + (ratio * 400f)  // Map 0-1 to -200 to +200
+                        debugPrefs.edit().putFloat("zombie_offset_x", zombieOffsetX).apply()
+                        return true
+                    }
+                    if (zombieYSliderRect.contains(x, y)) {
+                        draggingZombieYSlider = true
+                        val ratio = ((x - zombieYSliderRect.left) / zombieYSliderRect.width()).coerceIn(0f, 1f)
+                        zombieOffsetY = -200f + (ratio * 400f)
+                        debugPrefs.edit().putFloat("zombie_offset_y", zombieOffsetY).apply()
+                        return true
+                    }
+                    if (archerXSliderRect.contains(x, y)) {
+                        draggingArcherXSlider = true
+                        val ratio = ((x - archerXSliderRect.left) / archerXSliderRect.width()).coerceIn(0f, 1f)
+                        archerOffsetX = -200f + (ratio * 400f)
+                        debugPrefs.edit().putFloat("archer_offset_x", archerOffsetX).apply()
+                        return true
+                    }
+                    if (archerYSliderRect.contains(x, y)) {
+                        draggingArcherYSlider = true
+                        val ratio = ((x - archerYSliderRect.left) / archerYSliderRect.width()).coerceIn(0f, 1f)
+                        archerOffsetY = -200f + (ratio * 400f)
+                        debugPrefs.edit().putFloat("archer_offset_y", archerOffsetY).apply()
+                        return true
+                    }
+                    if (shotgunnerXSliderRect.contains(x, y)) {
+                        draggingShotgunnerXSlider = true
+                        val ratio = ((x - shotgunnerXSliderRect.left) / shotgunnerXSliderRect.width()).coerceIn(0f, 1f)
+                        shotgunnerOffsetX = -200f + (ratio * 400f)
+                        debugPrefs.edit().putFloat("shotgunner_offset_x", shotgunnerOffsetX).apply()
+                        return true
+                    }
+                    if (shotgunnerYSliderRect.contains(x, y)) {
+                        draggingShotgunnerYSlider = true
+                        val ratio = ((x - shotgunnerYSliderRect.left) / shotgunnerYSliderRect.width()).coerceIn(0f, 1f)
+                        shotgunnerOffsetY = -200f + (ratio * 400f)
+                        debugPrefs.edit().putFloat("shotgunner_offset_y", shotgunnerOffsetY).apply()
                         return true
                     }
                 }
@@ -2538,6 +2669,44 @@ class GameView(context: Context) : View(context) {
                     return true
                 }
 
+                // Handle sprite debug slider dragging (PRIORITY)
+                if (draggingZombieXSlider && zombieXSliderRect.width() > 0) {
+                    val ratio = ((x - zombieXSliderRect.left) / zombieXSliderRect.width()).coerceIn(0f, 1f)
+                    zombieOffsetX = -200f + (ratio * 400f)
+                    debugPrefs.edit().putFloat("zombie_offset_x", zombieOffsetX).apply()
+                    return true
+                }
+                if (draggingZombieYSlider && zombieYSliderRect.width() > 0) {
+                    val ratio = ((x - zombieYSliderRect.left) / zombieYSliderRect.width()).coerceIn(0f, 1f)
+                    zombieOffsetY = -200f + (ratio * 400f)
+                    debugPrefs.edit().putFloat("zombie_offset_y", zombieOffsetY).apply()
+                    return true
+                }
+                if (draggingArcherXSlider && archerXSliderRect.width() > 0) {
+                    val ratio = ((x - archerXSliderRect.left) / archerXSliderRect.width()).coerceIn(0f, 1f)
+                    archerOffsetX = -200f + (ratio * 400f)
+                    debugPrefs.edit().putFloat("archer_offset_x", archerOffsetX).apply()
+                    return true
+                }
+                if (draggingArcherYSlider && archerYSliderRect.width() > 0) {
+                    val ratio = ((x - archerYSliderRect.left) / archerYSliderRect.width()).coerceIn(0f, 1f)
+                    archerOffsetY = -200f + (ratio * 400f)
+                    debugPrefs.edit().putFloat("archer_offset_y", archerOffsetY).apply()
+                    return true
+                }
+                if (draggingShotgunnerXSlider && shotgunnerXSliderRect.width() > 0) {
+                    val ratio = ((x - shotgunnerXSliderRect.left) / shotgunnerXSliderRect.width()).coerceIn(0f, 1f)
+                    shotgunnerOffsetX = -200f + (ratio * 400f)
+                    debugPrefs.edit().putFloat("shotgunner_offset_x", shotgunnerOffsetX).apply()
+                    return true
+                }
+                if (draggingShotgunnerYSlider && shotgunnerYSliderRect.width() > 0) {
+                    val ratio = ((x - shotgunnerYSliderRect.left) / shotgunnerYSliderRect.width()).coerceIn(0f, 1f)
+                    shotgunnerOffsetY = -200f + (ratio * 400f)
+                    debugPrefs.edit().putFloat("shotgunner_offset_y", shotgunnerOffsetY).apply()
+                    return true
+                }
+
                 if (joyPointerId != -1) {
                     val pIndex = event.findPointerIndex(joyPointerId)
                     if (pIndex != -1) {
@@ -2561,6 +2730,12 @@ class GameView(context: Context) : View(context) {
                 // Release slider dragging
                 draggingMusicSlider = false
                 draggingRainSlider = false
+                draggingZombieXSlider = false
+                draggingZombieYSlider = false
+                draggingArcherXSlider = false
+                draggingArcherYSlider = false
+                draggingShotgunnerXSlider = false
+                draggingShotgunnerYSlider = false
 
                 val pid = event.getPointerId(index)
                 if (pid == joyPointerId) {
@@ -2770,16 +2945,16 @@ class GameView(context: Context) : View(context) {
                 val aspectRatio = spriteBitmap.width.toFloat() / spriteBitmap.height.toFloat()
                 val targetWidth = targetHeight * aspectRatio
 
-                // Position offsets to align sprites with hitbox circles
+                // Position offsets to align sprites with hitbox circles (configurable via debug menu)
                 val offsetX = when (e.type) {
-                    EnemyType.SHOTGUNNER -> 100f  // Move left from 110f
-                    EnemyType.ARCHER -> 20f  // Move left from 30f
-                    else -> 0f
+                    EnemyType.SHOTGUNNER -> shotgunnerOffsetX
+                    EnemyType.ARCHER -> archerOffsetX
+                    else -> zombieOffsetX
                 }
                 val offsetY = when (e.type) {
-                    EnemyType.SHOTGUNNER -> 40f  // Move down (was -40f too high)
-                    EnemyType.ARCHER -> 0f  // Move down from -5f
-                    else -> 0f
+                    EnemyType.SHOTGUNNER -> shotgunnerOffsetY
+                    EnemyType.ARCHER -> archerOffsetY
+                    else -> zombieOffsetY
                 }
 
                 // Draw glow BEHIND sprite at actual hitbox position (green for zombies)
@@ -3644,6 +3819,213 @@ class GameView(context: Context) : View(context) {
                     damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
                 }
+
+                "SPRITE_DEBUG" -> {
+                    // Sprite Debug Menu - visual alignment tool
+                    canvas.drawText("SPRITE ALIGNMENT", menuLeft + menuWidth / 2f, 100f, menuTitlePaint)
+
+                    val padding = 30f
+                    var yPos = 150f
+
+                    // Preview box dimensions
+                    val previewBoxWidth = menuWidth - (padding * 2)
+                    val previewBoxHeight = 200f
+                    val boxGap = 20f
+
+                    // Slider dimensions
+                    val sliderWidth = previewBoxWidth - 120f
+                    val sliderHeight = 40f
+
+                    // Paint for preview boxes
+                    val previewBoxPaint = Paint().apply {
+                        color = Color.argb(80, 0, 50, 50)
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    val previewBorderPaint = Paint().apply {
+                        color = Color.CYAN
+                        style = Paint.Style.STROKE
+                        strokeWidth = 3f
+                        isAntiAlias = true
+                    }
+                    val labelPaint = Paint().apply {
+                        color = Color.WHITE
+                        textSize = 28f
+                        textAlign = Paint.Align.LEFT
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    val valuePaint = Paint().apply {
+                        color = Color.GREEN
+                        textSize = 24f
+                        textAlign = Paint.Align.RIGHT
+                        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+                        isAntiAlias = true
+                    }
+                    val sliderBgPaint = Paint().apply {
+                        color = Color.argb(100, 0, 0, 0)
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    val sliderFillPaint = Paint().apply {
+                        color = Color.CYAN
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+
+                    // Helper function to draw slider
+                    fun drawSlider(rect: RectF, value: Float, min: Float, max: Float, label: String) {
+                        // Background
+                        canvas.drawRoundRect(rect, 8f, 8f, sliderBgPaint)
+
+                        // Fill based on value
+                        val ratio = ((value - min) / (max - min)).coerceIn(0f, 1f)
+                        val fillRect = RectF(rect.left, rect.top, rect.left + rect.width() * ratio, rect.bottom)
+                        canvas.drawRoundRect(fillRect, 8f, 8f, sliderFillPaint)
+
+                        // Border
+                        canvas.drawRoundRect(rect, 8f, 8f, previewBorderPaint)
+
+                        // Label and value
+                        canvas.drawText(label, rect.left + 10f, rect.top - 10f, labelPaint)
+                        canvas.drawText(value.toInt().toString(), rect.right - 10f, rect.top - 10f, valuePaint)
+                    }
+
+                    // ZOMBIE Preview & Controls
+                    val zombieBoxRect = RectF(menuLeft + padding, yPos, menuLeft + padding + previewBoxWidth, yPos + previewBoxHeight)
+                    canvas.drawRoundRect(zombieBoxRect, 12f, 12f, previewBoxPaint)
+                    canvas.drawRoundRect(zombieBoxRect, 12f, 12f, previewBorderPaint)
+                    canvas.drawText("ZOMBIE", zombieBoxRect.left + 10f, zombieBoxRect.top + 30f, labelPaint)
+
+                    // Zombie preview rendering
+                    val zombiePreviewX = zombieBoxRect.centerX()
+                    val zombiePreviewY = zombieBoxRect.centerY() - 10f
+                    val zombieRadius = 30f  // 25% larger than 24f
+                    canvas.drawCircle(zombiePreviewX, zombiePreviewY, zombieRadius, enemyGlowPaint)
+
+                    // Draw zombie sprite
+                    if (enemySprites.isNotEmpty() && enemySprites.size > 1) {
+                        val zombieSprite = enemySprites[1]  // Use sprite 1 (down-facing)
+                        val targetHeight = 75f
+                        val aspectRatio = zombieSprite.width.toFloat() / zombieSprite.height.toFloat()
+                        val targetWidth = targetHeight * aspectRatio
+                        val dstRect = RectF(
+                            zombiePreviewX + zombieOffsetX - targetWidth / 2f,
+                            zombiePreviewY + zombieOffsetY - targetHeight,
+                            zombiePreviewX + zombieOffsetX + targetWidth / 2f,
+                            zombiePreviewY + zombieOffsetY
+                        )
+                        canvas.drawBitmap(zombieSprite, null, dstRect, zombieTintPaint)
+                    }
+
+                    yPos += previewBoxHeight + 10f
+
+                    // Zombie X Slider
+                    zombieXSliderRect = RectF(menuLeft + padding + 100f, yPos, menuLeft + padding + 100f + sliderWidth, yPos + sliderHeight)
+                    drawSlider(zombieXSliderRect, zombieOffsetX, -200f, 200f, "offsetX:")
+                    yPos += sliderHeight + 10f
+
+                    // Zombie Y Slider
+                    zombieYSliderRect = RectF(menuLeft + padding + 100f, yPos, menuLeft + padding + 100f + sliderWidth, yPos + sliderHeight)
+                    drawSlider(zombieYSliderRect, zombieOffsetY, -200f, 200f, "offsetY:")
+                    yPos += sliderHeight + boxGap + 20f
+
+                    // ARCHER Preview & Controls
+                    val archerBoxRect = RectF(menuLeft + padding, yPos, menuLeft + padding + previewBoxWidth, yPos + previewBoxHeight)
+                    canvas.drawRoundRect(archerBoxRect, 12f, 12f, previewBoxPaint)
+                    canvas.drawRoundRect(archerBoxRect, 12f, 12f, previewBorderPaint)
+                    canvas.drawText("ARCHER", archerBoxRect.left + 10f, archerBoxRect.top + 30f, labelPaint)
+
+                    // Archer preview rendering
+                    val archerPreviewX = archerBoxRect.centerX()
+                    val archerPreviewY = archerBoxRect.centerY() - 10f
+                    val archerRadius = 24f
+                    canvas.drawCircle(archerPreviewX, archerPreviewY, archerRadius, enemyGlowPaint)
+
+                    // Draw archer sprite
+                    if (archerIdleFrames.isNotEmpty()) {
+                        val archerSprite = archerIdleFrames[0]  // First idle frame
+                        val targetHeight = 400f
+                        val aspectRatio = archerSprite.width.toFloat() / archerSprite.height.toFloat()
+                        val targetWidth = targetHeight * aspectRatio
+                        val dstRect = RectF(
+                            archerPreviewX + archerOffsetX - targetWidth / 2f,
+                            archerPreviewY + archerOffsetY - targetHeight,
+                            archerPreviewX + archerOffsetX + targetWidth / 2f,
+                            archerPreviewY + archerOffsetY
+                        )
+                        canvas.drawBitmap(archerSprite, null, dstRect, spritePaint)
+                    }
+
+                    yPos += previewBoxHeight + 10f
+
+                    // Archer X Slider
+                    archerXSliderRect = RectF(menuLeft + padding + 100f, yPos, menuLeft + padding + 100f + sliderWidth, yPos + sliderHeight)
+                    drawSlider(archerXSliderRect, archerOffsetX, -200f, 200f, "offsetX:")
+                    yPos += sliderHeight + 10f
+
+                    // Archer Y Slider
+                    archerYSliderRect = RectF(menuLeft + padding + 100f, yPos, menuLeft + padding + 100f + sliderWidth, yPos + sliderHeight)
+                    drawSlider(archerYSliderRect, archerOffsetY, -200f, 200f, "offsetY:")
+                    yPos += sliderHeight + boxGap + 20f
+
+                    // SHOTGUNNER Preview & Controls
+                    val shotgunnerBoxRect = RectF(menuLeft + padding, yPos, menuLeft + padding + previewBoxWidth, yPos + previewBoxHeight)
+                    canvas.drawRoundRect(shotgunnerBoxRect, 12f, 12f, previewBoxPaint)
+                    canvas.drawRoundRect(shotgunnerBoxRect, 12f, 12f, previewBorderPaint)
+                    canvas.drawText("SHOTGUNNER", shotgunnerBoxRect.left + 10f, shotgunnerBoxRect.top + 30f, labelPaint)
+
+                    // Shotgunner preview rendering
+                    val shotgunnerPreviewX = shotgunnerBoxRect.centerX()
+                    val shotgunnerPreviewY = shotgunnerBoxRect.centerY() - 10f
+                    val shotgunnerRadius = 24f
+                    canvas.drawCircle(shotgunnerPreviewX, shotgunnerPreviewY, shotgunnerRadius, enemyGlowPaint)
+
+                    // Draw shotgunner sprite
+                    if (shotgunnerIdleFrames.isNotEmpty()) {
+                        val shotgunnerSprite = shotgunnerIdleFrames[0]  // First idle frame
+                        val targetHeight = 120f
+                        val aspectRatio = shotgunnerSprite.width.toFloat() / shotgunnerSprite.height.toFloat()
+                        val targetWidth = targetHeight * aspectRatio
+                        val dstRect = RectF(
+                            shotgunnerPreviewX + shotgunnerOffsetX - targetWidth / 2f,
+                            shotgunnerPreviewY + shotgunnerOffsetY - targetHeight,
+                            shotgunnerPreviewX + shotgunnerOffsetX + targetWidth / 2f,
+                            shotgunnerPreviewY + shotgunnerOffsetY
+                        )
+                        canvas.drawBitmap(shotgunnerSprite, null, dstRect, spritePaint)
+                    }
+
+                    yPos += previewBoxHeight + 10f
+
+                    // Shotgunner X Slider
+                    shotgunnerXSliderRect = RectF(menuLeft + padding + 100f, yPos, menuLeft + padding + 100f + sliderWidth, yPos + sliderHeight)
+                    drawSlider(shotgunnerXSliderRect, shotgunnerOffsetX, -200f, 200f, "offsetX:")
+                    yPos += sliderHeight + 10f
+
+                    // Shotgunner Y Slider
+                    shotgunnerYSliderRect = RectF(menuLeft + padding + 100f, yPos, menuLeft + padding + 100f + sliderWidth, yPos + sliderHeight)
+                    drawSlider(shotgunnerYSliderRect, shotgunnerOffsetY, -200f, 200f, "offsetY:")
+                    yPos += sliderHeight + boxGap + 20f
+
+                    // Reset button at bottom
+                    resetOffsetsButtonRect = RectF(menuLeft + padding, yPos, menuLeft + padding + previewBoxWidth, yPos + 80f)
+                    val resetButtonPaint = Paint().apply {
+                        color = Color.argb(200, 100, 0, 0)
+                        style = Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    val resetButtonTextPaint = Paint().apply {
+                        color = Color.WHITE
+                        textSize = 36f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    canvas.drawRoundRect(resetOffsetsButtonRect, 12f, 12f, resetButtonPaint)
+                    canvas.drawRoundRect(resetOffsetsButtonRect, 12f, 12f, previewBorderPaint)
+                    canvas.drawText("RESET TO DEFAULTS", resetOffsetsButtonRect.centerX(), resetOffsetsButtonRect.centerY() + 12f, resetButtonTextPaint)
+                }
             }
         }
 
@@ -3737,6 +4119,41 @@ class GameView(context: Context) : View(context) {
         }
         canvas.drawText("$", upgradesTabRect.centerX(), upgradesTabRect.centerY() - 10f, dollarPaint)
         canvas.drawText(orbCurrency.toString(), upgradesTabRect.centerX(), upgradesTabRect.centerY() + 45f, orbCountPaint)
+
+        // Sprite Debug tab (below upgrades) - square button
+        val spriteDebugShadowRect = RectF(
+            spriteDebugTabRect.left + 4f,
+            spriteDebugTabRect.top + 4f,
+            spriteDebugTabRect.right + 4f,
+            spriteDebugTabRect.bottom + 4f
+        )
+        canvas.drawRect(spriteDebugShadowRect, tabShadowPaint)
+        canvas.drawRect(
+            spriteDebugTabRect,
+            if (currentMenu == "SPRITE_DEBUG") tabActivePaint else tabPaint
+        )
+        canvas.drawRect(spriteDebugTabRect, tabBorderPaint)
+
+        // Sprite icon (simple pixel/square pattern)
+        val spriteIconPaint = Paint().apply {
+            color = Color.MAGENTA
+            style = Paint.Style.FILL
+            isAntiAlias = false  // Pixel-perfect
+        }
+        val pixelSize = 12f
+        val spriteCenterX = spriteDebugTabRect.centerX()
+        val spriteCenterY = spriteDebugTabRect.centerY()
+        // Draw simple pixel art sprite icon (3x3 grid)
+        canvas.drawRect(spriteCenterX - pixelSize * 1.5f, spriteCenterY - pixelSize * 1.5f,
+                        spriteCenterX - pixelSize * 0.5f, spriteCenterY - pixelSize * 0.5f, spriteIconPaint)
+        canvas.drawRect(spriteCenterX + pixelSize * 0.5f, spriteCenterY - pixelSize * 1.5f,
+                        spriteCenterX + pixelSize * 1.5f, spriteCenterY - pixelSize * 0.5f, spriteIconPaint)
+        canvas.drawRect(spriteCenterX - pixelSize * 0.5f, spriteCenterY - pixelSize * 0.5f,
+                        spriteCenterX + pixelSize * 0.5f, spriteCenterY + pixelSize * 0.5f, spriteIconPaint)
+        canvas.drawRect(spriteCenterX - pixelSize * 1.5f, spriteCenterY + pixelSize * 0.5f,
+                        spriteCenterX - pixelSize * 0.5f, spriteCenterY + pixelSize * 1.5f, spriteIconPaint)
+        canvas.drawRect(spriteCenterX + pixelSize * 0.5f, spriteCenterY + pixelSize * 0.5f,
+                        spriteCenterX + pixelSize * 1.5f, spriteCenterY + pixelSize * 1.5f, spriteIconPaint)
 
         // Joystick in screen space
         if (joyActive) {
