@@ -544,21 +544,29 @@ class GameView(context: Context) : View(context) {
     private var speedButtonRect = RectF()
     private var hpButtonRect = RectF()
     private var barrierButtonRect = RectF()
+    private var dogButtonRect = RectF()  // PHASE 4: Dog companion
 
     enum class UpgradeType {
-        // Special upgrades (wave-end rewards)
+        // Original special upgrades
         STASIS_CORE, OVERCLOCKER, QUANTUM_MIRROR, FRAGMENT_DRIVE,
         CONVERT_TO_ORBS, CONVERT_TO_BULLETS, CONVERT_TO_HOMING,
-        MULTI_GUN,  // Adds an additional gun
-        // New variety upgrades
-        CHAIN_LIGHTNING,  // Bullets chain to nearby enemies
-        FROST_AURA,       // Slows enemies near player
-        RICOCHET,         // Bullets bounce between enemies
-        LIFE_STEAL,       // Player bullets heal on hit (% based)
-        CRITICAL_HITS,    // Chance for 3x damage bullets
-        BERSERKER,        // +50% damage when below 30% HP
-        PHASING,          // Walk through enemies (no contact damage)
-        // Basic stat upgrades removed from wave-end (moved to orb shop only)
+        MULTI_GUN,
+        // Original variety upgrades
+        CHAIN_LIGHTNING, FROST_AURA, RICOCHET, LIFE_STEAL, CRITICAL_HITS, BERSERKER, PHASING,
+
+        // PHASE 5: MASSIVE UPGRADE VARIETY EXPANSION
+        // Offensive (15 new)
+        DOUBLE_TAP, SNIPER_SHOTS, MACHINE_GUN, SHOTGUN_BLAST, LASER_BEAM,
+        POISON_ROUNDS, FREEZE_BULLETS, LIGHTNING_CHAIN, UNSTABLE_AMMO, ARMOR_PIERCING,
+        INCENDIARY, CLUSTER_BOMB, RAILGUN, BOOMERANG_SHOTS, ROCKET_LAUNCHER,
+        // Defensive (10 new)
+        DODGE_ROLL, REFLECTIVE_SHIELD, FORTIFY, REGENERATION, SECOND_WIND,
+        THORNS, BLINK, SHIELD_RECHARGE, EVASION, DAMAGE_REDUCTION,
+        // Utility (10 new)
+        TIME_DILATION, TREASURE_HUNTER, SCAVENGER, GLASS_CANNON, BLOODLUST,
+        MOMENTUM, LUCKY_CLOVER, VAMPIRISM_PLUS, ORB_MAGNET_PLUS, RECYCLER,
+        // Companion (5 new)
+        TURRET, CLONE, FAMILIAR, SHADOW, TOTEM
     }
 
     data class UpgradeOption(val type: UpgradeType, val label: String, val desc: String, val weight: Int = 100)
@@ -582,6 +590,64 @@ class GameView(context: Context) : View(context) {
     private var hasFragmentDrive = false
     private var overclockTimer = 0f
     private var overclockActive = false
+
+    // PHASE 5: New upgrade state variables
+    // Offensive
+    private var doubleTapCounter = 0
+    private var hasSniperShots = false
+    private var hasMachineGun = false
+    private var hasShotgunBlast = false
+    private var hasLaserBeam = false
+    private var hasPoisonRounds = false
+    private var hasFreezeBullets = false
+    private var hasLightningChain = false
+    private var hasUnstableAmmo = false
+    private var hasArmorPiercing = false
+    private var hasIncendiary = false
+    private var hasClusterBomb = false
+    private var hasRailgun = false
+    private var hasBoomerangShots = false
+    private var hasRocketLauncher = false
+    // Defensive
+    private var hasDodgeRoll = false
+    private var hasReflectiveShield = false
+    private var hasFortify = false
+    private var hasRegeneration = false
+    private var hasSecondWind = false
+    private var secondWindUsed = false
+    private var hasThorns = false
+    private var hasEvasion = false
+    private var hasDamageReduction = false
+    // Utility
+    private var hasTimeDilation = false
+    private var hasTreasureHunter = false
+    private var hasScavenger = false
+    private var hasGlassCannon = false
+    private var hasBloodlust = false
+    private var bloodlustKills = 0
+    private var hasMomentum = false
+    private var momentumStacks = 0
+    private var hasLuckyClover = false
+    private var hasVampirismPlus = false
+    private var hasOrbMagnetPlus = false
+    private var hasRecycler = false
+    // Companion
+    private var hasTurret = false
+    private var hasClone = false
+    private var hasFamiliar = false
+    private var hasShadow = false
+    private var hasTotem = false
+
+    // PHASE 4: Dog Companion System
+    private var hasDogCompanion = false
+    private var dogVariant = ""  // "COMBAT", "COLLECTOR", "GUARD"
+    private var dogSelectionActive = false
+    private var dogX = 0f
+    private var dogY = 0f
+    private var dogAngle = 0f  // For combat dog orbit
+    private var dogShootTimer = 0f
+    private var dogBiteTimer = 0f
+    private var dogSelectionButtonRects = mutableListOf<RectF>()
 
     init {
         isFocusable = true
@@ -2201,6 +2267,7 @@ class GameView(context: Context) : View(context) {
 
         // Weighted randomized drop table with dynamic descriptions
         val dropTable = listOf(
+            // Original upgrades
             UpgradeOption(UpgradeType.STASIS_CORE, "Stasis Core", if (hasStasisCore) "Already active" else "Player bullets slow enemy bullets", weight = 100),
             UpgradeOption(UpgradeType.OVERCLOCKER, "Overclocker", "2x fire rate for 5 seconds", weight = 120),
             UpgradeOption(UpgradeType.QUANTUM_MIRROR, "Orbiting Drone",
@@ -2210,18 +2277,76 @@ class GameView(context: Context) : View(context) {
                     else -> "Add drone: $quantumMirrorMaxPaddles → ${quantumMirrorMaxPaddles + 1}"
                 }, weight = 80),
             UpgradeOption(UpgradeType.FRAGMENT_DRIVE, "Fragment Drive", if (hasFragmentDrive) "Already active" else "Kills spawn 4 micro-projectiles", weight = 100),
-            UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Guns: $gunCount → ${gunCount + 1}", weight = 40),  // Rare
+            UpgradeOption(UpgradeType.MULTI_GUN, "Multi-Gun", "Guns: $gunCount → ${gunCount + 1}", weight = 30),  // Legendary
             UpgradeOption(UpgradeType.CONVERT_TO_ORBS, "Orb Converter", "Convert all bullets to orbs", weight = 90),
             UpgradeOption(UpgradeType.CONVERT_TO_BULLETS, "Bullet Converter", "Convert all bullets to player bullets", weight = 110),
             UpgradeOption(UpgradeType.CONVERT_TO_HOMING, "Homing Converter", "Convert all bullets to homing shards", weight = 85),
-            // New variety upgrades
             UpgradeOption(UpgradeType.CHAIN_LIGHTNING, "Chain Lightning", if (hasChainLightning) "Already active" else "Bullets arc to 2 nearby enemies", weight = 95),
             UpgradeOption(UpgradeType.FROST_AURA, "Frost Aura", if (hasFrostAura) "Already active" else "Slows enemies within 150px", weight = 105),
             UpgradeOption(UpgradeType.RICOCHET, "Ricochet", if (hasRicochet) "Already active" else "Bullets bounce to another enemy", weight = 90),
             UpgradeOption(UpgradeType.LIFE_STEAL, "Life Steal", "${(lifeStealPercent * 100).toInt()}% → ${((lifeStealPercent + 0.1f) * 100).toInt()}% heal", weight = 75),
             UpgradeOption(UpgradeType.CRITICAL_HITS, "Critical Hits", "${(critChance * 100).toInt()}% → ${((critChance + 0.15f) * 100).toInt()}% crit chance", weight = 100),
             UpgradeOption(UpgradeType.BERSERKER, "Berserker Mode", if (hasBerserker) "Already active" else "+50% damage when HP < 30%", weight = 85),
-            UpgradeOption(UpgradeType.PHASING, "Phasing", if (hasPhasing) "Already active" else "Walk through enemies safely", weight = 70)
+            UpgradeOption(UpgradeType.PHASING, "Phasing", if (hasPhasing) "Already active" else "Walk through enemies safely", weight = 70),
+
+            // PHASE 5: MASSIVE UPGRADE EXPANSION (40+ new upgrades)
+            // Offensive (Common: 100-120 weight)
+            UpgradeOption(UpgradeType.DOUBLE_TAP, "Double Tap", if (doubleTapCounter > 0) "Active" else "Every 3rd bullet fires twice", weight = 110),
+            UpgradeOption(UpgradeType.MACHINE_GUN, "Machine Gun", if (hasMachineGun) "Already active" else "+200% fire rate, -30% damage", weight = 95),
+            UpgradeOption(UpgradeType.POISON_ROUNDS, "Poison Rounds", if (hasPoisonRounds) "Already active" else "Bullets apply 3s DoT (2 dmg/sec)", weight = 105),
+            UpgradeOption(UpgradeType.FREEZE_BULLETS, "Freeze Bullets", if (hasFreezeBullets) "Already active" else "30% chance to freeze for 1s", weight = 100),
+            UpgradeOption(UpgradeType.UNSTABLE_AMMO, "Unstable Ammo", if (hasUnstableAmmo) "Already active" else "25% chance bullets explode (2x AOE dmg)", weight = 115),
+            UpgradeOption(UpgradeType.INCENDIARY, "Incendiary", if (hasIncendiary) "Already active" else "Bullets leave fire zones", weight = 90),
+
+            // Offensive (Uncommon: 70-90 weight)
+            UpgradeOption(UpgradeType.SNIPER_SHOTS, "Sniper Shots", if (hasSniperShots) "Already active" else "+100% damage, -50% fire rate", weight = 80),
+            UpgradeOption(UpgradeType.SHOTGUN_BLAST, "Shotgun Blast", if (hasShotgunBlast) "Already active" else "Fire 5 bullets in tight cone", weight = 75),
+            UpgradeOption(UpgradeType.LIGHTNING_CHAIN, "Lightning Chain", if (hasLightningChain) "Already active" else "Bullets chain to 1 more enemy", weight = 85),
+            UpgradeOption(UpgradeType.ARMOR_PIERCING, "Armor Piercing", if (hasArmorPiercing) "Already active" else "Ignore 50% of enemy HP", weight = 70),
+            UpgradeOption(UpgradeType.CLUSTER_BOMB, "Cluster Bomb", if (hasClusterBomb) "Already active" else "Bullets split into 3 on impact", weight = 80),
+            UpgradeOption(UpgradeType.BOOMERANG_SHOTS, "Boomerang Shots", if (hasBoomerangShots) "Already active" else "Bullets return after max distance", weight = 75),
+
+            // Offensive (Rare/Legendary: 40-60 weight)
+            UpgradeOption(UpgradeType.LASER_BEAM, "Laser Beam", if (hasLaserBeam) "Already active" else "Hold fire for continuous beam", weight = 50),
+            UpgradeOption(UpgradeType.RAILGUN, "Railgun", if (hasRailgun) "Already active" else "Instant bullets, pierce all", weight = 45),
+            UpgradeOption(UpgradeType.ROCKET_LAUNCHER, "Rocket Launcher", if (hasRocketLauncher) "Already active" else "Slow bullets, massive explosions", weight = 40),
+
+            // Defensive (Common: 100-120 weight)
+            UpgradeOption(UpgradeType.REGENERATION, "Regeneration", if (hasRegeneration) "Already active" else "Heal 1 HP every 3 seconds", weight = 110),
+            UpgradeOption(UpgradeType.THORNS, "Thorns", if (hasThorns) "Already active" else "Enemies take 5 dmg when hitting you", weight = 105),
+            UpgradeOption(UpgradeType.DAMAGE_REDUCTION, "Damage Reduction", if (hasDamageReduction) "Already active" else "Take 15% less damage", weight = 115),
+
+            // Defensive (Uncommon: 70-90 weight)
+            UpgradeOption(UpgradeType.DODGE_ROLL, "Dodge Roll", if (hasDodgeRoll) "Already active" else "10% chance to dodge bullets", weight = 85),
+            UpgradeOption(UpgradeType.REFLECTIVE_SHIELD, "Reflective Shield", if (hasReflectiveShield) "Already active" else "Reflect 25% damage back", weight = 80),
+            UpgradeOption(UpgradeType.FORTIFY, "Fortify", if (hasFortify) "Already active" else "+50% max HP, -20% speed", weight = 75),
+            UpgradeOption(UpgradeType.SHIELD_RECHARGE, "Shield Recharge", if (clickerBarrierLevel > 0) "Barrier regenerates 2x faster" else "Requires Prismatic Barrier first", weight = 70),
+            UpgradeOption(UpgradeType.EVASION, "Evasion", if (hasEvasion) "Already active" else "+15% speed when below 30% HP", weight = 80),
+
+            // Defensive (Rare/Legendary: 40-60 weight)
+            UpgradeOption(UpgradeType.SECOND_WIND, "Second Wind", if (hasSecondWind) "Already active" else "Revive once per wave at 50% HP", weight = 30),
+            UpgradeOption(UpgradeType.BLINK, "Blink", "Short-range teleport (8s cooldown)", weight = 40),
+
+            // Utility (Common: 100-120 weight)
+            UpgradeOption(UpgradeType.TREASURE_HUNTER, "Treasure Hunter", if (hasTreasureHunter) "Already active" else "2x orb drops from enemies", weight = 110),
+            UpgradeOption(UpgradeType.SCAVENGER, "Scavenger", if (hasScavenger) "Already active" else "Power-ups last 50% longer", weight = 105),
+            UpgradeOption(UpgradeType.MOMENTUM, "Momentum", "Stacks: $momentumStacks → ${momentumStacks + 1} (+10% speed for 2s after kill)", weight = 115),
+            UpgradeOption(UpgradeType.ORB_MAGNET_PLUS, "Orb Magnet+", if (hasOrbMagnetPlus) "Already active" else "2x larger collection radius", weight = 100),
+
+            // Utility (Uncommon: 70-90 weight)
+            UpgradeOption(UpgradeType.TIME_DILATION, "Time Dilation", if (hasTimeDilation) "Already active" else "Slow time 20% for 3s every 10s", weight = 70),
+            UpgradeOption(UpgradeType.GLASS_CANNON, "Glass Cannon", if (hasGlassCannon) "Already active" else "+100% damage, -50% max HP", weight = 60),
+            UpgradeOption(UpgradeType.BLOODLUST, "Bloodlust", "Kills: $bloodlustKills (+5% dmg per kill, max 100%)", weight = 85),
+            UpgradeOption(UpgradeType.LUCKY_CLOVER, "Lucky Clover", if (hasLuckyClover) "Already active" else "15% higher chance for rare upgrades", weight = 75),
+            UpgradeOption(UpgradeType.VAMPIRISM_PLUS, "Vampirism+", if (hasVampirismPlus) "Already active" else "Heal for 50% of damage dealt", weight = 80),
+            UpgradeOption(UpgradeType.RECYCLER, "Recycler", if (hasRecycler) "Already active" else "Enemy bullets become orbs when destroyed", weight = 75),
+
+            // Companion (Rare/Legendary: 20-40 weight)
+            UpgradeOption(UpgradeType.TURRET, "Turret", "Stationary turret at last position (10s)", weight = 35),
+            UpgradeOption(UpgradeType.CLONE, "Clone", if (hasClone) "Already active" else "Duplicate that mirrors position, fires with you", weight = 25),
+            UpgradeOption(UpgradeType.FAMILIAR, "Familiar", if (hasFamiliar) "Already active" else "Orbiting creature that shoots independently", weight = 30),
+            UpgradeOption(UpgradeType.SHADOW, "Shadow", if (hasShadow) "Already active" else "Copy trails behind, fires delayed shots", weight = 28),
+            UpgradeOption(UpgradeType.TOTEM, "Totem", "Stationary heal totem (2 HP/sec nearby)", weight = 32)
         )
 
         // Weighted random selection - pick 3 unique options
@@ -3913,6 +4038,26 @@ class GameView(context: Context) : View(context) {
                     // Button 1: Damage (at top)
                     damageButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
                     drawButton(damageButtonRect, "DAMAGE+", clickerDamageLevel, 10)
+                    buttonY -= buttonHeight + buttonGap
+
+                    // PHASE 4: Dog Companion Button (above damage)
+                    dogButtonRect = RectF(buttonStartX, buttonY, buttonStartX + buttonWidth, buttonY + buttonHeight)
+                    val shadowRect = RectF(dogButtonRect.left + 4f, dogButtonRect.top + 4f, dogButtonRect.right + 4f, dogButtonRect.bottom + 4f)
+                    canvas.drawRoundRect(shadowRect, 12f, 12f, buttonShadowPaint)
+
+                    // Special color for dog button
+                    val dogBgPaint = Paint().apply {
+                        color = if (hasDogCompanion) Color.argb(200, 100, 50, 0) else Color.BLACK  // Brown if owned
+                        isAntiAlias = true
+                    }
+                    canvas.drawRoundRect(dogButtonRect, 12f, 12f, dogBgPaint)
+                    canvas.drawRoundRect(dogButtonRect, 12f, 12f, buttonBorderPaint)
+
+                    val dogLabel = if (hasDogCompanion) "DOG ($dogVariant)" else "DOG COMPANION"
+                    val dogDesc = if (hasDogCompanion) "Already purchased" else "One-time unlock - 3 variants"
+                    canvas.drawText(dogLabel, dogButtonRect.centerX(), dogButtonRect.centerY() - 20f, buttonLabelPaint)
+                    canvas.drawText(dogDesc, dogButtonRect.centerX(), dogButtonRect.centerY() + 10f, buttonDetailPaint)
+                    canvas.drawText("Cost: 15 orbs", dogButtonRect.centerX(), dogButtonRect.centerY() + 35f, buttonDetailPaint)
                 }
 
                 "SPRITE_DEBUG" -> {
