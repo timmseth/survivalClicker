@@ -426,7 +426,8 @@ class GameView(context: Context) : View(context) {
         val isZombie: Boolean = false,  // Melee-only enemy, no shooting, 2x contact damage
         var lastX: Float = x,  // Track previous position to determine movement state
         var lastY: Float = y,
-        var isRunning: Boolean = false  // Animation state: true = run, false = idle
+        var isRunning: Boolean = false,  // Animation state: true = run, false = idle
+        val teleportPhases: MutableSet<Int> = mutableSetOf()  // Track boss teleport thresholds (75, 50, 25)
     ) {
         fun getCornerCount(): Int = when(type) {
             EnemyType.ZOMBIE -> 0  // Melee only, no shooting
@@ -502,6 +503,11 @@ class GameView(context: Context) : View(context) {
     private var inGacha = false
     private var gachaButtonsDisabled = false
     private var gachaButtonEnableTimer = 0f
+
+    // Reroll system (Brotato-style)
+    private var rerollCount = 0
+    private val shownOptionsThisWave = mutableSetOf<UpgradeType>()
+    private var rerollButtonRect = RectF()
 
     // QoL: Wave completion feedback
     private var waveCompleteFeedbackTime = 0f
@@ -819,6 +825,10 @@ class GameView(context: Context) : View(context) {
         CrashLogger.log("spawnWave() called for wave $wave. Current enemies: ${enemies.size}, bullets: ${bullets.size}")
         enemies.clear()
 
+        // Reset reroll state for new wave
+        rerollCount = 0
+        shownOptionsThisWave.clear()
+
         val rnd = Random(System.currentTimeMillis())
         val isBreatherWave = wave % 5 == 0 && wave > 0
         val isBossWave = wave % 5 == 0 && wave > 0  // Spawn boss every 5 waves
@@ -931,9 +941,9 @@ class GameView(context: Context) : View(context) {
             val bossX = playerX + (rnd.nextFloat() - 0.5f) * 200f
             val bossY = playerY - height/2f - 100f  // Spawn above player
 
-            // Boss stats: massive HP, slower speed, larger size
-            val bossHp = 200f + wave * 50f  // Scales heavily with wave
-            val bossSpeed = 40f  // Slow moving
+            // Boss stats: MASSIVE HP, FAST, THREATENING (Phase 2 boss buff)
+            val bossHp = 500f + wave * 100f  // 2.5x HP scaling - much tankier
+            val bossSpeed = 200f + wave * 10f  // 5x faster base + wave scaling - aggressive pursuit
             val bossRadius = 48f  // 2x larger than normal enemies
 
             val boss = Enemy(bossX, bossY, bossRadius, bossSpeed, bossHp, bossHp, bossType, isBoss = true)
@@ -1218,8 +1228,10 @@ class GameView(context: Context) : View(context) {
                 val ny = joyDy / len  // Fixed: was joyDx
                 // Apply speed boost stacks (10% per stack)
                 val speedMultiplier = 1f + (speedBoostStacks * 0.10f)
-                val newX = playerX + nx * playerSpeed * speedMultiplier * dt
-                val newY = playerY + ny * playerSpeed * speedMultiplier * dt
+                // Apply speed cap at 600f (Phase 3 feature)
+                val effectiveSpeed = (playerSpeed * speedMultiplier).coerceAtMost(600f)
+                val newX = playerX + nx * effectiveSpeed * dt
+                val newY = playerY + ny * effectiveSpeed * dt
 
                 // Check wall collision
                 var blockedByWall = false
@@ -1349,6 +1361,25 @@ class GameView(context: Context) : View(context) {
                 e.lastX = e.x
                 e.lastY = e.y
 
+                // Boss teleportation at health thresholds (Phase 2 feature)
+                if (e.isBoss) {
+                    val hpPercent = (e.hp / e.maxHp * 100).toInt()
+                    when {
+                        hpPercent <= 25 && !e.teleportPhases.contains(25) -> {
+                            teleportBoss(e)
+                            e.teleportPhases.add(25)
+                        }
+                        hpPercent <= 50 && !e.teleportPhases.contains(50) -> {
+                            teleportBoss(e)
+                            e.teleportPhases.add(50)
+                        }
+                        hpPercent <= 75 && !e.teleportPhases.contains(75) -> {
+                            teleportBoss(e)
+                            e.teleportPhases.add(75)
+                        }
+                    }
+                }
+
                 // Update animation based on enemy type and movement state
                 when (e.type) {
                     EnemyType.ARCHER -> {
@@ -1477,6 +1508,29 @@ class GameView(context: Context) : View(context) {
             @Suppress("DEPRECATION")
             vibrator.vibrate(50)
         }
+    }
+
+    private fun teleportBoss(boss: Enemy) {
+        // Teleport boss to random position 200-400px from player
+        val angle = Random.nextFloat() * 2 * PI.toFloat()
+        val distance = 200f + Random.nextFloat() * 200f
+        val newX = playerX + cos(angle) * distance
+        val newY = playerY + sin(angle) * distance
+
+        // Clamp to screen bounds (with margin)
+        boss.x = newX.coerceIn(boss.radius + 50f, width - boss.radius - 50f)
+        boss.y = newY.coerceIn(boss.radius + 50f, height - boss.radius - 50f)
+
+        // Spawn cyan particle burst at new position for visual feedback
+        for (i in 0 until 15) {
+            val particleAngle = Random.nextFloat() * 2 * PI.toFloat()
+            val particleSpeed = 100f + Random.nextFloat() * 100f
+            val vx = cos(particleAngle) * particleSpeed
+            val vy = sin(particleAngle) * particleSpeed
+            particles.add(Particle(boss.x, boss.y, vx, vy, Color.CYAN, 0.8f))
+        }
+
+        CrashLogger.log("Boss teleported to (${boss.x}, ${boss.y})")
     }
 
     private fun updateBullets(dt: Float) {
@@ -1872,20 +1926,20 @@ class GameView(context: Context) : View(context) {
                         e.shootCooldown = 4f + crowdPenalty
                     }
                     EnemyType.BOSS_BALLCHAIN -> {
-                        // Boss: 360° pattern, bullet count = wave number
-                        val bulletCount = wave  // Scales with wave
+                        // Boss: 360° pattern, bullet count = wave number + 8 (Phase 2 buff)
+                        val bulletCount = wave + 8  // More bullets than before!
                         val spiralOffset = if (wave > 10) e.shootCooldown * 2f else 0f  // Spiral after wave 10
                         val angleStep = (2f * PI.toFloat()) / bulletCount
 
                         for (i in 0 until bulletCount) {
                             if (bullets.size >= MAX_BULLETS) break
                             val angle = angleStep * i + spiralOffset
-                            val bulletSpeed = 150f  // Boss bullets are slower but numerous
+                            val bulletSpeed = 200f  // Faster bullets (was 150f) - harder to dodge
                             val vx = cos(angle) * bulletSpeed
                             val vy = sin(angle) * bulletSpeed
                             bullets.add(Bullet(e.x, e.y, vx, vy, false))
                         }
-                        e.shootCooldown = 2f  // Boss fires frequently
+                        e.shootCooldown = 1.5f  // Faster fire rate (was 2f) - more aggressive
                     }
                     else -> {
                         // Zombie - shouldn't reach here but skip just in case
@@ -2171,12 +2225,16 @@ class GameView(context: Context) : View(context) {
         )
 
         // Weighted random selection - pick 3 unique options
-        val totalWeight = dropTable.sumOf { it.weight }
+        // Exclude options shown this wave (unless all have been shown)
+        val availableOptions = dropTable.filter { !shownOptionsThisWave.contains(it.type) }
+        val poolToUse = if (availableOptions.size >= 3) availableOptions else dropTable
+
+        val totalWeight = poolToUse.sumOf { it.weight }
         val chosen = mutableSetOf<UpgradeOption>()
 
-        while (chosen.size < 3 && chosen.size < dropTable.size) {
+        while (chosen.size < 3 && chosen.size < poolToUse.size) {
             var random = (Math.random() * totalWeight).toInt()
-            for (option in dropTable) {
+            for (option in poolToUse) {
                 random -= option.weight
                 if (random <= 0 && !chosen.contains(option)) {
                     chosen.add(option)
@@ -2185,7 +2243,33 @@ class GameView(context: Context) : View(context) {
             }
         }
 
+        // Track these options as shown this wave
+        chosen.forEach { shownOptionsThisWave.add(it.type) }
+
         upgradeOptions.addAll(chosen)
+    }
+
+    private fun getRerollCost(): Int {
+        return when (rerollCount) {
+            0 -> 10
+            1 -> 25
+            2 -> 50
+            else -> 100
+        }
+    }
+
+    private fun rerollGachaOptions() {
+        if (orbCurrency < getRerollCost()) {
+            // Not enough orbs, do nothing
+            return
+        }
+
+        // Deduct orbs
+        orbCurrency -= getRerollCost()
+        rerollCount++
+
+        // Regenerate options (showUpgradeOptions will exclude shownOptionsThisWave)
+        showUpgradeOptions()
     }
 
     private fun applyUpgrade(option: UpgradeOption) {
@@ -2337,6 +2421,17 @@ class GameView(context: Context) : View(context) {
 
     private fun handleGachaTouch(x: Float, y: Float) {
         if (!inGacha || gachaButtonsDisabled) return
+
+        // Check if reroll button was clicked first
+        if (rerollButtonRect.contains(x, y)) {
+            val rerollCost = getRerollCost()
+            if (orbCurrency >= rerollCost) {
+                rerollGachaOptions()
+            }
+            return
+        }
+
+        // Check upgrade cards
         val cardWidth = width * 0.8f
         val cardHeight = height * 0.12f
         val startX = (width - cardWidth) / 2f
@@ -4182,6 +4277,18 @@ class GameView(context: Context) : View(context) {
         // Gacha menu overlay
         if (inGacha) {
             canvas.drawRect(0f, 0f, w, h, overlayPaint)
+
+            // Show orb count prominently at top
+            val orbCountPaint = Paint().apply {
+                color = Color.GREEN
+                textSize = 40f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                setShadowLayer(8f, 0f, 0f, Color.GREEN)
+            }
+            canvas.drawText("Orbs: $orbCurrency", w / 2f, h * 0.15f, orbCountPaint)
+
             canvas.drawText("Choose an upgrade:", w * 0.1f, h * 0.25f, textPaint)
 
             val cardWidth = w * 0.8f
@@ -4202,6 +4309,58 @@ class GameView(context: Context) : View(context) {
                 canvas.drawRoundRect(rect, 16f, 16f, cardBorderPaint)
                 canvas.drawText(opt.label, rect.left + 40f, rect.top + 60f, textPaint)
                 canvas.drawText(opt.desc, rect.left + 40f, rect.top + 110f, textPaint)
+            }
+
+            // Reroll button below the upgrade cards
+            val rerollButtonY = firstY + 3 * gap + h * 0.02f
+            val rerollButtonHeight = h * 0.10f
+            rerollButtonRect = RectF(
+                startX,
+                rerollButtonY,
+                startX + cardWidth,
+                rerollButtonY + rerollButtonHeight
+            )
+
+            val rerollCost = getRerollCost()
+            val canAfford = orbCurrency >= rerollCost
+
+            // Reroll button background (gray if can't afford, cyan if can)
+            val rerollBgPaint = Paint().apply {
+                color = if (canAfford) Color.argb(150, 0, 180, 180) else Color.argb(100, 80, 80, 80)
+                isAntiAlias = true
+            }
+            val rerollBorderPaint = Paint().apply {
+                color = if (canAfford) Color.CYAN else Color.GRAY
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+                isAntiAlias = true
+            }
+            val rerollTextPaint = Paint().apply {
+                color = if (canAfford) Color.WHITE else Color.GRAY
+                textSize = 36f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+
+            canvas.drawRoundRect(rerollButtonRect, 16f, 16f, rerollBgPaint)
+            canvas.drawRoundRect(rerollButtonRect, 16f, 16f, rerollBorderPaint)
+
+            if (canAfford) {
+                canvas.drawText("REROLL ($rerollCost orbs)", rerollButtonRect.centerX(), rerollButtonRect.centerY() + 12f, rerollTextPaint)
+            } else {
+                canvas.drawText("REROLL (Need $rerollCost orbs)", rerollButtonRect.centerX(), rerollButtonRect.centerY() + 12f, rerollTextPaint)
+            }
+
+            // Show reroll count if any rerolls have been used
+            if (rerollCount > 0) {
+                val rerollCountPaint = Paint().apply {
+                    color = Color.YELLOW
+                    textSize = 28f
+                    textAlign = Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                canvas.drawText("Rerolls used: $rerollCount", w / 2f, h * 0.20f, rerollCountPaint)
             }
         }
 
@@ -4326,6 +4485,24 @@ class GameView(context: Context) : View(context) {
                 alpha = (255 * countdownAlpha).toInt()
             }
             canvas.drawText(countdownValue.toString(), w / 2f, h / 2f + 70f, countdownPaint)
+        }
+
+        // Speed warning overlay (Phase 3 feature)
+        val speedMultiplier = 1f + (speedBoostStacks * 0.10f)
+        val currentSpeed = playerSpeed * speedMultiplier
+        if (currentSpeed > 500f && !inGacha && !inDeathScreen) {
+            val warningPaint = Paint().apply {
+                color = Color.YELLOW
+                textSize = 36f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+                // Pulsing effect
+                alpha = (sin(System.currentTimeMillis() / 200.0) * 127 + 128).toInt()
+                setShadowLayer(10f, 0f, 0f, Color.YELLOW)
+            }
+            val warningText = if (currentSpeed >= 600f) "⚠ MAX SPEED (${currentSpeed.toInt()}) ⚠" else "⚠ HIGH SPEED (${currentSpeed.toInt()}) ⚠"
+            canvas.drawText(warningText, w / 2f, 150f, warningPaint)
         }
 
         // Draw crash error overlay (if crashed)
