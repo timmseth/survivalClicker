@@ -3905,17 +3905,18 @@ class GameView(context: Context) : View(context) {
 
                     // Draw zombie sprite
                     if (enemySprites.isNotEmpty() && enemySprites.size > 1) {
-                        val zombieSprite = enemySprites[1]  // Use sprite 1 (down-facing)
-                        val targetHeight = 75f
-                        val aspectRatio = zombieSprite.width.toFloat() / zombieSprite.height.toFloat()
-                        val targetWidth = targetHeight * aspectRatio
-                        val dstRect = RectF(
-                            zombiePreviewX + zombieOffsetX - targetWidth / 2f,
-                            zombiePreviewY + zombieOffsetY - targetHeight,
-                            zombiePreviewX + zombieOffsetX + targetWidth / 2f,
-                            zombiePreviewY + zombieOffsetY
-                        )
-                        canvas.drawBitmap(zombieSprite, null, dstRect, zombieTintPaint)
+                        enemySprites[1]?.let { zombieSprite ->
+                            val targetHeight = 75f
+                            val aspectRatio = zombieSprite.width.toFloat() / zombieSprite.height.toFloat()
+                            val targetWidth = targetHeight * aspectRatio
+                            val dstRect = RectF(
+                                zombiePreviewX + zombieOffsetX - targetWidth / 2f,
+                                zombiePreviewY + zombieOffsetY - targetHeight,
+                                zombiePreviewX + zombieOffsetX + targetWidth / 2f,
+                                zombiePreviewY + zombieOffsetY
+                            )
+                            canvas.drawBitmap(zombieSprite, null, dstRect, zombieTintPaint)
+                        }
                     }
 
                     yPos += previewBoxHeight + 10f
@@ -3944,17 +3945,18 @@ class GameView(context: Context) : View(context) {
 
                     // Draw archer sprite
                     if (archerIdleFrames.isNotEmpty()) {
-                        val archerSprite = archerIdleFrames[0]  // First idle frame
-                        val targetHeight = 400f
-                        val aspectRatio = archerSprite.width.toFloat() / archerSprite.height.toFloat()
-                        val targetWidth = targetHeight * aspectRatio
-                        val dstRect = RectF(
-                            archerPreviewX + archerOffsetX - targetWidth / 2f,
-                            archerPreviewY + archerOffsetY - targetHeight,
-                            archerPreviewX + archerOffsetX + targetWidth / 2f,
-                            archerPreviewY + archerOffsetY
-                        )
-                        canvas.drawBitmap(archerSprite, null, dstRect, spritePaint)
+                        archerIdleFrames[0]?.let { archerSprite ->
+                            val targetHeight = 400f
+                            val aspectRatio = archerSprite.width.toFloat() / archerSprite.height.toFloat()
+                            val targetWidth = targetHeight * aspectRatio
+                            val dstRect = RectF(
+                                archerPreviewX + archerOffsetX - targetWidth / 2f,
+                                archerPreviewY + archerOffsetY - targetHeight,
+                                archerPreviewX + archerOffsetX + targetWidth / 2f,
+                                archerPreviewY + archerOffsetY
+                            )
+                            canvas.drawBitmap(archerSprite, null, dstRect, spritePaint)
+                        }
                     }
 
                     yPos += previewBoxHeight + 10f
@@ -3983,17 +3985,18 @@ class GameView(context: Context) : View(context) {
 
                     // Draw shotgunner sprite
                     if (shotgunnerIdleFrames.isNotEmpty()) {
-                        val shotgunnerSprite = shotgunnerIdleFrames[0]  // First idle frame
-                        val targetHeight = 120f
-                        val aspectRatio = shotgunnerSprite.width.toFloat() / shotgunnerSprite.height.toFloat()
-                        val targetWidth = targetHeight * aspectRatio
-                        val dstRect = RectF(
-                            shotgunnerPreviewX + shotgunnerOffsetX - targetWidth / 2f,
-                            shotgunnerPreviewY + shotgunnerOffsetY - targetHeight,
-                            shotgunnerPreviewX + shotgunnerOffsetX + targetWidth / 2f,
-                            shotgunnerPreviewY + shotgunnerOffsetY
-                        )
-                        canvas.drawBitmap(shotgunnerSprite, null, dstRect, spritePaint)
+                        shotgunnerIdleFrames[0]?.let { shotgunnerSprite ->
+                            val targetHeight = 120f
+                            val aspectRatio = shotgunnerSprite.width.toFloat() / shotgunnerSprite.height.toFloat()
+                            val targetWidth = targetHeight * aspectRatio
+                            val dstRect = RectF(
+                                shotgunnerPreviewX + shotgunnerOffsetX - targetWidth / 2f,
+                                shotgunnerPreviewY + shotgunnerOffsetY - targetHeight,
+                                shotgunnerPreviewX + shotgunnerOffsetX + targetWidth / 2f,
+                                shotgunnerPreviewY + shotgunnerOffsetY
+                            )
+                            canvas.drawBitmap(shotgunnerSprite, null, dstRect, spritePaint)
+                        }
                     }
 
                     yPos += previewBoxHeight + 10f
