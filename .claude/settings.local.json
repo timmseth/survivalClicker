@@ -24,7 +24,8 @@
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --limit 1)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run watch 20296365699 --exit-status)",
       "Bash(do cp \"idle00$i.png\" \"../../../../../NeonSurvivor/app/src/main/res/drawable/boss_ballchain_idle_$i.png\")",
-      "Bash(do cp \"run00$i.png\" \"../../../../../NeonSurvivor/app/src/main/res/drawable/boss_ballchain_run_$i.png\")"
+      "Bash(do cp \"run00$i.png\" \"../../../../../NeonSurvivor/app/src/main/res/drawable/boss_ballchain_run_$i.png\")",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run watch 20360937128 --exit-status)"
     ],
     "deny": [],
     "ask": []

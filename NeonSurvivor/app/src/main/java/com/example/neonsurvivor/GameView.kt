@@ -1994,11 +1994,19 @@ class GameView(context: Context) : View(context) {
                         // Cap multishot spread to 45 degrees total (0.785 radians)
                         val maxSpread = 0.785f
                         val spreadPerShot = if (totalShots > 1) (maxSpread / totalShots).coerceAtMost(0.2f) else 0f
+
+                        // CRITICAL FIX: Always fire at least one bullet directly at target
+                        // Fire center bullet first (guaranteed hit)
+                        val baseAngle = atan2(ny.toDouble(), nx.toDouble()).toFloat()
+                        bullets.add(Bullet(gunX, gunY, cos(baseAngle) * bulletSpeed, sin(baseAngle) * bulletSpeed, true))
+
+                        // Then fire spread pattern around it
                         for (shot in 0 until totalShots) {
                             val angleOffset = if (totalShots > 1) (shot - (totalShots - 1) / 2f) * spreadPerShot else 0f
                             for (i in -1..1) {
                                 if (bullets.size >= MAX_BULLETS) break
-                                val angle = atan2(ny.toDouble(), nx.toDouble()).toFloat() + i * spreadAngle + angleOffset
+                                if (i == 0 && shot == 0) continue  // Skip center of first shot (already fired above)
+                                val angle = baseAngle + i * spreadAngle + angleOffset
                                 val vx = cos(angle) * bulletSpeed
                                 val vy = sin(angle) * bulletSpeed
                                 bullets.add(Bullet(gunX, gunY, vx, vy, true))
@@ -2886,6 +2894,14 @@ class GameView(context: Context) : View(context) {
                         barrierShieldLayers = kotlin.math.min(clickerBarrierLevel, 7)
                         return true
                     }
+                    dogButtonRect.contains(x, y) && !hasDogCompanion && orbCurrency >= 15 -> {
+                        orbCurrency -= 15
+                        hasDogCompanion = true
+                        dogVariant = "COMBAT"  // Default to combat variant for now
+                        dogSelectionActive = false
+                        CrashLogger.log("Dog companion purchased! Variant: $dogVariant")
+                        return true
+                    }
                 }
             }
 
@@ -2977,7 +2993,8 @@ class GameView(context: Context) : View(context) {
                         fireButtonRect.contains(x, y) ||
                         speedButtonRect.contains(x, y) ||
                         hpButtonRect.contains(x, y) ||
-                        barrierButtonRect.contains(x, y)
+                        barrierButtonRect.contains(x, y) ||
+                        dogButtonRect.contains(x, y)
                     )) ||
                     (currentMenu == "SETTINGS" && (
                         musicToggleRect.contains(x, y) ||
