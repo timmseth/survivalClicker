@@ -317,6 +317,20 @@ class GameView(context: Context) : View(context) {
     private val shotgunnerIdleFrames = mutableListOf<Bitmap>()
     private val shotgunnerRunFrames = mutableListOf<Bitmap>()
 
+    // Boss Ball and Chain sprite animation frames
+    private val bossBallchainIdleFrames = mutableListOf<Bitmap>()
+    private val bossBallchainRunFrames = mutableListOf<Bitmap>()
+
+    // Wolf companion animation frames (4 directions x 2 animations)
+    private val wolfIdleDownFrames = mutableListOf<Bitmap>()
+    private val wolfIdleLeftFrames = mutableListOf<Bitmap>()
+    private val wolfIdleUpFrames = mutableListOf<Bitmap>()
+    private val wolfIdleRightFrames = mutableListOf<Bitmap>()
+    private val wolfRunDownFrames = mutableListOf<Bitmap>()
+    private val wolfRunLeftFrames = mutableListOf<Bitmap>()
+    private val wolfRunUpFrames = mutableListOf<Bitmap>()
+    private val wolfRunRightFrames = mutableListOf<Bitmap>()
+
     private var spriteFrameTime = 0f
     private var currentFrame = 0
     private val frameDelay = 0.1f // 10 FPS animation
@@ -376,6 +390,8 @@ class GameView(context: Context) : View(context) {
 
     // Debug settings
     private var godMode = false
+    private var spriteMenuEnabled = false
+    private var bossMenuEnabled = false
 
     // Sprite offset values (adjustable in sprite debug menu)
     private var zombieOffsetX = 0f
@@ -736,6 +752,68 @@ class GameView(context: Context) : View(context) {
             e.printStackTrace()
         }
 
+        // Load boss ball and chain individual frame files from drawable resources
+        try {
+            // Idle: 5 frames
+            for (i in 0..4) {
+                val resourceId = resources.getIdentifier("boss_ballchain_idle_$i", "drawable", context.packageName)
+                if (resourceId != 0) {
+                    bossBallchainIdleFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+                }
+            }
+            CrashLogger.log("Loaded BOSS_BALLCHAIN idle frames: ${bossBallchainIdleFrames.size}")
+
+            // Run: 8 frames
+            for (i in 0..7) {
+                val resourceId = resources.getIdentifier("boss_ballchain_run_$i", "drawable", context.packageName)
+                if (resourceId != 0) {
+                    bossBallchainRunFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+                }
+            }
+            CrashLogger.log("Loaded BOSS_BALLCHAIN run frames: ${bossBallchainRunFrames.size}")
+        } catch (e: Exception) {
+            CrashLogger.log("ERROR: Failed to load BOSS_BALLCHAIN sprite frames: ${e.message}")
+            e.printStackTrace()
+        }
+
+        // Load wolf companion individual frame files from drawable resources (4 directions x 2 animations)
+        try {
+            // Idle frames - all 4 directions (12 frames each)
+            for (i in 0..11) {
+                var resourceId = resources.getIdentifier("wolf_idle_down_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfIdleDownFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+
+                resourceId = resources.getIdentifier("wolf_idle_left_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfIdleLeftFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+
+                resourceId = resources.getIdentifier("wolf_idle_up_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfIdleUpFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+
+                resourceId = resources.getIdentifier("wolf_idle_right_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfIdleRightFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+            }
+
+            // Run frames - all 4 directions (12 frames each)
+            for (i in 0..11) {
+                var resourceId = resources.getIdentifier("wolf_run_down_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfRunDownFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+
+                resourceId = resources.getIdentifier("wolf_run_left_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfRunLeftFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+
+                resourceId = resources.getIdentifier("wolf_run_up_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfRunUpFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+
+                resourceId = resources.getIdentifier("wolf_run_right_$i", "drawable", context.packageName)
+                if (resourceId != 0) wolfRunRightFrames.add(BitmapFactory.decodeResource(resources, resourceId))
+            }
+
+            CrashLogger.log("Loaded WOLF frames: down=${wolfIdleDownFrames.size+wolfRunDownFrames.size}, left=${wolfIdleLeftFrames.size+wolfRunLeftFrames.size}, up=${wolfIdleUpFrames.size+wolfRunUpFrames.size}, right=${wolfIdleRightFrames.size+wolfRunRightFrames.size}")
+        } catch (e: Exception) {
+            CrashLogger.log("ERROR: Failed to load WOLF sprite frames: ${e.message}")
+            e.printStackTrace()
+        }
+
         // Zombies use the enemies001-027 sprites loaded above
     }
 
@@ -820,6 +898,8 @@ class GameView(context: Context) : View(context) {
 
             // Load debug settings
             godMode = debugPrefs.getBoolean("god_mode", false)
+            spriteMenuEnabled = debugPrefs.getBoolean("sprite_menu_enabled", false)
+            bossMenuEnabled = debugPrefs.getBoolean("boss_menu_enabled", false)
             gunCount = debugPrefs.getInt("gun_count", 1).coerceIn(1, 10)
 
             // Load sprite offset values
@@ -1480,8 +1560,20 @@ class GameView(context: Context) : View(context) {
                             e.animFrame = (e.animFrame + 1) % 3
                         }
                     }
+                    EnemyType.BOSS_BALLCHAIN -> {
+                        // Boss Ball and Chain: idle = 5 frames, run = 8 frames @ 8 FPS
+                        val fps = 8f
+                        val frameCount = if (e.isRunning) 8 else 5
+                        val frameDuration = 1f / fps
+
+                        e.animTime += dt
+                        if (e.animTime >= frameDuration) {
+                            e.animTime = 0f
+                            e.animFrame = (e.animFrame + 1) % frameCount
+                        }
+                    }
                     else -> {
-                        // Boss or other types
+                        // Other types (fallback)
                         e.animTime += dt
                         if (e.animTime >= 0.2f) {
                             e.animTime = 0f
@@ -2697,8 +2789,8 @@ class GameView(context: Context) : View(context) {
             val x = event.getX(index)
             val y = event.getY(index)
 
-            // **HIGHEST PRIORITY** Check Sprite Debug tab (always visible)
-            if (!inGacha && !isDying && !inDeathScreen && spriteDebugTabRect.contains(x, y)) {
+            // **HIGHEST PRIORITY** Check Sprite Debug tab (only if enabled)
+            if (spriteMenuEnabled && !inGacha && !isDying && !inDeathScreen && spriteDebugTabRect.contains(x, y)) {
                 if (currentMenu == "SPRITE_DEBUG") {
                     // Close menu and start countdown
                     currentMenu = null
@@ -2879,7 +2971,7 @@ class GameView(context: Context) : View(context) {
                 val touchingUI = !inGacha && !isDying && !inDeathScreen && (
                     settingsTabRect.contains(x, y) ||
                     upgradesTabRect.contains(x, y) ||
-                    spriteDebugTabRect.contains(x, y) ||
+                    (spriteMenuEnabled && spriteDebugTabRect.contains(x, y)) ||
                     (currentMenu == "UPGRADES" && (
                         damageButtonRect.contains(x, y) ||
                         fireButtonRect.contains(x, y) ||
@@ -3140,7 +3232,18 @@ class GameView(context: Context) : View(context) {
         for (e in enemies) {
             // Check if this is a boss - render differently
             if (e.isBoss) {
-                val bossBitmap = bossSprites[e.type]
+                // Get boss sprite from animated frames
+                val bossBitmap = when (e.type) {
+                    EnemyType.BOSS_BALLCHAIN -> {
+                        // Use idle or run animation based on movement state
+                        val frames = if (e.isRunning) bossBallchainRunFrames else bossBallchainIdleFrames
+                        if (frames.isNotEmpty() && e.animFrame < frames.size) {
+                            frames[e.animFrame]
+                        } else null
+                    }
+                    else -> bossSprites[e.type]  // Fallback to old single-sprite system
+                }
+
                 if (bossBitmap != null) {
                     // Draw boss much larger
                     val bossSize = 120f  // 2x larger than regular enemies
@@ -4473,40 +4576,42 @@ class GameView(context: Context) : View(context) {
         canvas.drawText("$", upgradesTabRect.centerX(), upgradesTabRect.centerY() - 10f, dollarPaint)
         canvas.drawText(orbCurrency.toString(), upgradesTabRect.centerX(), upgradesTabRect.centerY() + 45f, orbCountPaint)
 
-        // Sprite Debug tab (below upgrades) - square button
-        val spriteDebugShadowRect = RectF(
-            spriteDebugTabRect.left + 4f,
-            spriteDebugTabRect.top + 4f,
-            spriteDebugTabRect.right + 4f,
-            spriteDebugTabRect.bottom + 4f
-        )
-        canvas.drawRect(spriteDebugShadowRect, tabShadowPaint)
-        canvas.drawRect(
-            spriteDebugTabRect,
-            if (currentMenu == "SPRITE_DEBUG") tabActivePaint else tabPaint
-        )
-        canvas.drawRect(spriteDebugTabRect, tabBorderPaint)
+        // Sprite Debug tab (below upgrades) - only show if debug option enabled
+        if (spriteMenuEnabled) {
+            val spriteDebugShadowRect = RectF(
+                spriteDebugTabRect.left + 4f,
+                spriteDebugTabRect.top + 4f,
+                spriteDebugTabRect.right + 4f,
+                spriteDebugTabRect.bottom + 4f
+            )
+            canvas.drawRect(spriteDebugShadowRect, tabShadowPaint)
+            canvas.drawRect(
+                spriteDebugTabRect,
+                if (currentMenu == "SPRITE_DEBUG") tabActivePaint else tabPaint
+            )
+            canvas.drawRect(spriteDebugTabRect, tabBorderPaint)
 
-        // Sprite icon (simple pixel/square pattern)
-        val spriteIconPaint = Paint().apply {
-            color = Color.MAGENTA
-            style = Paint.Style.FILL
-            isAntiAlias = false  // Pixel-perfect
+            // Sprite icon (simple pixel/square pattern)
+            val spriteIconPaint = Paint().apply {
+                color = Color.MAGENTA
+                style = Paint.Style.FILL
+                isAntiAlias = false  // Pixel-perfect
+            }
+            val pixelSize = 12f
+            val spriteCenterX = spriteDebugTabRect.centerX()
+            val spriteCenterY = spriteDebugTabRect.centerY()
+            // Draw simple pixel art sprite icon (3x3 grid)
+            canvas.drawRect(spriteCenterX - pixelSize * 1.5f, spriteCenterY - pixelSize * 1.5f,
+                            spriteCenterX - pixelSize * 0.5f, spriteCenterY - pixelSize * 0.5f, spriteIconPaint)
+            canvas.drawRect(spriteCenterX + pixelSize * 0.5f, spriteCenterY - pixelSize * 1.5f,
+                            spriteCenterX + pixelSize * 1.5f, spriteCenterY - pixelSize * 0.5f, spriteIconPaint)
+            canvas.drawRect(spriteCenterX - pixelSize * 0.5f, spriteCenterY - pixelSize * 0.5f,
+                            spriteCenterX + pixelSize * 0.5f, spriteCenterY + pixelSize * 0.5f, spriteIconPaint)
+            canvas.drawRect(spriteCenterX - pixelSize * 1.5f, spriteCenterY + pixelSize * 0.5f,
+                            spriteCenterX - pixelSize * 0.5f, spriteCenterY + pixelSize * 1.5f, spriteIconPaint)
+            canvas.drawRect(spriteCenterX + pixelSize * 0.5f, spriteCenterY + pixelSize * 0.5f,
+                            spriteCenterX + pixelSize * 1.5f, spriteCenterY + pixelSize * 1.5f, spriteIconPaint)
         }
-        val pixelSize = 12f
-        val spriteCenterX = spriteDebugTabRect.centerX()
-        val spriteCenterY = spriteDebugTabRect.centerY()
-        // Draw simple pixel art sprite icon (3x3 grid)
-        canvas.drawRect(spriteCenterX - pixelSize * 1.5f, spriteCenterY - pixelSize * 1.5f,
-                        spriteCenterX - pixelSize * 0.5f, spriteCenterY - pixelSize * 0.5f, spriteIconPaint)
-        canvas.drawRect(spriteCenterX + pixelSize * 0.5f, spriteCenterY - pixelSize * 1.5f,
-                        spriteCenterX + pixelSize * 1.5f, spriteCenterY - pixelSize * 0.5f, spriteIconPaint)
-        canvas.drawRect(spriteCenterX - pixelSize * 0.5f, spriteCenterY - pixelSize * 0.5f,
-                        spriteCenterX + pixelSize * 0.5f, spriteCenterY + pixelSize * 0.5f, spriteIconPaint)
-        canvas.drawRect(spriteCenterX - pixelSize * 1.5f, spriteCenterY + pixelSize * 0.5f,
-                        spriteCenterX - pixelSize * 0.5f, spriteCenterY + pixelSize * 1.5f, spriteIconPaint)
-        canvas.drawRect(spriteCenterX + pixelSize * 0.5f, spriteCenterY + pixelSize * 0.5f,
-                        spriteCenterX + pixelSize * 1.5f, spriteCenterY + pixelSize * 1.5f, spriteIconPaint)
 
         // Joystick in screen space
         if (joyActive) {

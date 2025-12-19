@@ -93,6 +93,8 @@ class SettingsView(context: Context) : View(context) {
 
     // Debug settings
     private var godModeToggleRect = RectF()
+    private var spriteMenuToggleRect = RectF()
+    private var bossMenuToggleRect = RectF()
     private var gunCountMinusRect = RectF()
     private var gunCountPlusRect = RectF()
     private var showingDebugMenu = false
@@ -105,6 +107,8 @@ class SettingsView(context: Context) : View(context) {
     private val debugPrefs = context.getSharedPreferences("debug_settings", Context.MODE_PRIVATE)
 
     private var godMode = debugPrefs.getBoolean("god_mode", false)
+    private var spriteMenuEnabled = debugPrefs.getBoolean("sprite_menu_enabled", false)
+    private var bossMenuEnabled = debugPrefs.getBoolean("boss_menu_enabled", false)
     private var gunCount = debugPrefs.getInt("gun_count", 1)
 
     init {
@@ -200,18 +204,28 @@ class SettingsView(context: Context) : View(context) {
         val debugToggleWidth = 150f
         val debugToggleHeight = 60f
         godModeToggleRect = RectF(
-            w * 0.6f, h * 0.30f,
-            w * 0.6f + debugToggleWidth, h * 0.30f + debugToggleHeight
+            w * 0.6f, h * 0.25f,
+            w * 0.6f + debugToggleWidth, h * 0.25f + debugToggleHeight
+        )
+
+        spriteMenuToggleRect = RectF(
+            w * 0.6f, h * 0.33f,
+            w * 0.6f + debugToggleWidth, h * 0.33f + debugToggleHeight
+        )
+
+        bossMenuToggleRect = RectF(
+            w * 0.6f, h * 0.41f,
+            w * 0.6f + debugToggleWidth, h * 0.41f + debugToggleHeight
         )
 
         val buttonSize = 60f
         gunCountMinusRect = RectF(
-            w * 0.4f, h * 0.42f,
-            w * 0.4f + buttonSize, h * 0.42f + buttonSize
+            w * 0.4f, h * 0.51f,
+            w * 0.4f + buttonSize, h * 0.51f + buttonSize
         )
         gunCountPlusRect = RectF(
-            w * 0.7f, h * 0.42f,
-            w * 0.7f + buttonSize, h * 0.42f + buttonSize
+            w * 0.7f, h * 0.51f,
+            w * 0.7f + buttonSize, h * 0.51f + buttonSize
         )
 
         // Back button
@@ -392,10 +406,7 @@ class SettingsView(context: Context) : View(context) {
             }
             canvas.drawText("DEBUG MENU", w / 2f, h * 0.2f, debugTitlePaint)
 
-            // God mode toggle
-            canvas.drawText("GOD MODE", w * 0.25f, godModeToggleRect.centerY() + 15f, labelPaint)
-            canvas.drawRoundRect(godModeToggleRect, 30f, 30f, if (godMode) toggleOnPaint else toggleOffPaint)
-            canvas.drawRoundRect(godModeToggleRect, 30f, 30f, buttonBorderPaint)
+            // Toggle text paint
             val toggleTextPaint = Paint().apply {
                 color = Color.WHITE
                 textSize = 30f
@@ -403,11 +414,37 @@ class SettingsView(context: Context) : View(context) {
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
             }
+
+            val smallLabelPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 38f
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isAntiAlias = true
+            }
+
+            // God mode toggle
+            canvas.drawText("GOD MODE", w * 0.18f, godModeToggleRect.centerY() + 15f, smallLabelPaint)
+            canvas.drawRoundRect(godModeToggleRect, 30f, 30f, if (godMode) toggleOnPaint else toggleOffPaint)
+            canvas.drawRoundRect(godModeToggleRect, 30f, 30f, buttonBorderPaint)
             canvas.drawText(if (godMode) "ON" else "OFF",
                 godModeToggleRect.centerX(), godModeToggleRect.centerY() + 12f, toggleTextPaint)
 
+            // Sprite Menu toggle
+            canvas.drawText("SPRITE MENU", w * 0.15f, spriteMenuToggleRect.centerY() + 15f, smallLabelPaint)
+            canvas.drawRoundRect(spriteMenuToggleRect, 30f, 30f, if (spriteMenuEnabled) toggleOnPaint else toggleOffPaint)
+            canvas.drawRoundRect(spriteMenuToggleRect, 30f, 30f, buttonBorderPaint)
+            canvas.drawText(if (spriteMenuEnabled) "ON" else "OFF",
+                spriteMenuToggleRect.centerX(), spriteMenuToggleRect.centerY() + 12f, toggleTextPaint)
+
+            // Boss Menu toggle
+            canvas.drawText("BOSS MENU", w * 0.17f, bossMenuToggleRect.centerY() + 15f, smallLabelPaint)
+            canvas.drawRoundRect(bossMenuToggleRect, 30f, 30f, if (bossMenuEnabled) toggleOnPaint else toggleOffPaint)
+            canvas.drawRoundRect(bossMenuToggleRect, 30f, 30f, buttonBorderPaint)
+            canvas.drawText(if (bossMenuEnabled) "ON" else "OFF",
+                bossMenuToggleRect.centerX(), bossMenuToggleRect.centerY() + 12f, toggleTextPaint)
+
             // Gun count controls
-            canvas.drawText("GUN COUNT", w * 0.25f, gunCountMinusRect.centerY() + 15f, labelPaint)
+            canvas.drawText("GUN COUNT", w * 0.18f, gunCountMinusRect.centerY() + 15f, smallLabelPaint)
 
             // Minus button
             canvas.drawRoundRect(gunCountMinusRect, 10f, 10f, buttonBgPaint)
@@ -474,6 +511,18 @@ class SettingsView(context: Context) : View(context) {
                         godModeToggleRect.contains(x, y) -> {
                             godMode = !godMode
                             debugPrefs.edit().putBoolean("god_mode", godMode).apply()
+                            invalidate()
+                            return true
+                        }
+                        spriteMenuToggleRect.contains(x, y) -> {
+                            spriteMenuEnabled = !spriteMenuEnabled
+                            debugPrefs.edit().putBoolean("sprite_menu_enabled", spriteMenuEnabled).apply()
+                            invalidate()
+                            return true
+                        }
+                        bossMenuToggleRect.contains(x, y) -> {
+                            bossMenuEnabled = !bossMenuEnabled
+                            debugPrefs.edit().putBoolean("boss_menu_enabled", bossMenuEnabled).apply()
                             invalidate()
                             return true
                         }
